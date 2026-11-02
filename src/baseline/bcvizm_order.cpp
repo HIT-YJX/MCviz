@@ -17,6 +17,7 @@ Score safe_edge_cap(const Graph& g, const LayerPattern& P, Objective obj,
     return score(P, obj, cap);
 }
 
+
 // Use endpoint degree bounds to order vertices by maximum frontier weight.
 // For fixed K, construction costs O(B+n^2+m) time and O(B+n+m_P) space;
 // B is the graph identity encoding, and m_P counts required-pattern edges.
@@ -63,6 +64,7 @@ BcvizmIndex construct_bcvizm(const Graph& g, const BuildSpec& spec) {
         }
         index.order.push_back({best, root ? 0 : key[best], root});
         done[best] = true;
+
         for (size_t z = 0; z < adj[best].size(); z++) {
             unsigned v = adj[best][z];
             if (!done[v]) {

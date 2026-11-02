@@ -16,6 +16,7 @@ VertexRef parse_required(const std::string& s, unsigned K) {
 }
 
 
+// Read command options and apply the release defaults.
 CliOptions parse_cli(int argc, const char* const* argv, const CliCapabilities& caps) {
     CliOptions out;
     if (caps.cohesion_build) out.pivot_memory_bytes = 512ULL << 20;
@@ -24,17 +25,23 @@ CliOptions parse_cli(int argc, const char* const* argv, const CliCapabilities& c
     if (argc < 2 || std::string(argv[1]) == "--help") { out.help = true; return out; }
     out.command = argv[1];
     std::map<std::string, std::string> a;
+
     for (int i = 2; i < argc; ++i) {
         std::string key = argv[i];
+
         std::string val = argv[++i];
         a.emplace(key, val);
     }
+
     out.layers = static_cast<unsigned>(number(a.at("--layers"), "layers", 4096));
+
     out.graph_file = a.at("--graph");
     if (a.count("--vertices")) out.vertices_file = a.at("--vertices");
+
     if (a.count("--index")) out.index_file = a.at("--index");
     if (a.count("--index-dir")) out.index_dir = a.at("--index-dir");
     if (a.count("--log-dir")) out.log_dir = a.at("--log-dir");
+
     if (a.count("--pattern")) out.pattern_selector = a.at("--pattern");
     if (a.count("--path-order-file")) out.path_order_file = a.at("--path-order-file");
     if (a.count("--primary")) out.primary = static_cast<Layer>(number(a.at("--primary"), "primary (0-based)", out.layers - 1));
@@ -42,6 +49,7 @@ CliOptions parse_cli(int argc, const char* const* argv, const CliCapabilities& c
     if (a.count("--beta")) out.beta = parse_thresholds(a.at("--beta"), out.layers);
     if (a.count("--gamma")) out.query.gamma = parse_thresholds(a.at("--gamma"), out.layers);
     if (a.count("--required")) out.query.required = parse_required(a.at("--required"), out.layers);
+
     if (a.count("--pivot-memory-mb")) {
         out.pivot_memory_bytes = number(a.at("--pivot-memory-mb"), "pivot memory MiB",
             std::numeric_limits<std::size_t>::max() / (1ULL << 20)) * (1ULL << 20);
@@ -60,15 +68,18 @@ CliOptions parse_cli(int argc, const char* const* argv, const CliCapabilities& c
     require(out.cohesion_strategy == "auto" || out.cohesion_strategy == "general-dynamic-all", "Unsupported release construction strategy");
     if (a.count("--solver")) require(a.at("--solver") == "auto", "The release uses solver=auto");
     if (a.count("--build-core")) require(a.at("--build-core") == "queue", "The release uses queue core");
+
     if (a.count("--edge-bound")) require(a.at("--edge-bound") == "auto", "The release uses automatic upper bounds");
     if (a.count("--build-filter")) out.build_filter = a.at("--build-filter");
     require(out.build_filter == "auto" || out.build_filter == "off", "Unsupported build filter");
+
     if (a.count("--method")) {
         out.method = a.at("--method");
     }
     if (a.count("--min-layers")) {
         out.min_layers = static_cast<unsigned>(number(a.at("--min-layers"), "min-layers", 4096));
     }
+
     for (auto file : {&out.graph_file, &out.vertices_file}) {
         if (!file->empty() && !std::filesystem::path(*file).is_absolute() && !std::filesystem::exists(*file))
             *file = (std::filesystem::path(MCVIZ_RELEASE_ROOT) / "datasets" / *file).string();
@@ -78,16 +89,16 @@ CliOptions parse_cli(int argc, const char* const* argv, const CliCapabilities& c
     return out;
 }
 
-
+// Build the pattern and thresholds from command options.
 BuildSpec build_spec(const CliOptions& opt) {
     BuildSpec spec;
+
     spec.pattern = make_pattern(opt.layers, *opt.pattern_selector, opt.primary.value_or(0), opt.path_order_file);
     spec.objective = *opt.objective;
     if (opt.beta) spec.beta = *opt.beta;
     else if (opt.command == "solve") spec.beta = opt.query.gamma;
     return spec;
 }
-
 
 std::string cli_help() {
     return "MCviz/MCviz+: construct/query. Baselines: solve/construct/query.\n"

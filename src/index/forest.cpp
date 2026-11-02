@@ -10,7 +10,9 @@ namespace {
 struct DSU {
     std::vector<std::size_t> parent, size;
 
+    // Initialize each vertex as a separate component.
     explicit DSU(std::size_t n) : parent(n), size(n, 1) { std::iota(parent.begin(), parent.end(), 0); }
+
 
     std::size_t find(std::size_t u) {
         while (parent[u] != u) { parent[u] = parent[parent[u]]; u = parent[u]; }
@@ -21,6 +23,7 @@ struct DSU {
         u = find(u); v = find(v);
         if (u == v) return false;
         if (size[u] < size[v]) std::swap(u, v);
+
         parent[v] = u; size[u] += size[v];
         return true;
     }
@@ -37,6 +40,7 @@ std::size_t Forest::vertex_index(LocalVertex v) const {
 // Cost is O(m log(m+1)+n+K) plus DSU/map work; final structure uses O(n+K) space.
 Forest Forest::build(const Graph& g, const std::vector<WeightedEdge>& es, double* sort_ms) {
     Forest f;
+
     f.offsets.push_back(0);
     for (Layer i = 0; i < g.K; ++i) {
         for (VertexPos u = 0; u < g.vertex_ids[i].size(); ++u) f.vertices.push_back({i, u});
@@ -51,18 +55,23 @@ Forest Forest::build(const Graph& g, const std::vector<WeightedEdge>& es, double
         std::chrono::steady_clock::now() - sort_start).count();
     DSU d(f.vertices.size());
     f.nodes.resize(f.vertices.size());
+
     std::vector<std::size_t> repr(f.vertices.size());
     std::iota(repr.begin(), repr.end(), 0);
     for (std::size_t start = 0; start < order.size();) {
         std::size_t end = start;
+
         Score h = es[order[start]].weight;
         std::vector<std::size_t> before;
+
         while (end < order.size() && es[order[end]].weight == h) {
             const auto& e = es[order[end]].edge;
             before.push_back(d.find(f.vertex_index(e.u)));
             before.push_back(d.find(f.vertex_index(e.v)));
+
             ++end;
         }
+
         std::sort(before.begin(), before.end());
         before.erase(std::unique(before.begin(), before.end()), before.end());
         for (std::size_t j = start; j < end; ++j) {
@@ -82,6 +91,7 @@ Forest Forest::build(const Graph& g, const std::vector<WeightedEdge>& es, double
 }
 
 
+// Collect and sort the vertices below a hierarchy node.
 Sets Forest::members(std::size_t node, unsigned K) const {
     Sets d(K);
     std::vector<std::size_t> stack{node};
@@ -94,7 +104,7 @@ Sets Forest::members(std::size_t node, unsigned K) const {
     return d;
 }
 
-
+// Recover components at the requested weight threshold.
 std::vector<Sets> Forest::cut(Score threshold, unsigned K) const {
     std::vector<Sets> out;
     auto todo = roots;

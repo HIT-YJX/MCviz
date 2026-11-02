@@ -28,6 +28,7 @@ public:
         layer_pattern.assign(K, vector<bool>(K, false));
         for (uint q = 0; q < K; q++) {
             if (q == primary_part) continue;
+
             layer_pattern[primary_part][q] = true;
             layer_pattern[q][primary_part] = true;
         }
@@ -92,12 +93,15 @@ private:
 
 };
 
+// Compute the star objective from the selected layer sizes.
 inline ull compute_star_size(const vector<uint>& sizes, ProblemType pt, uint primary_part = 0) {
     if (sizes.empty()) return 0;
+
     if (pt == MBSC) return *min_element(sizes.begin(), sizes.end());
 
     const ull limit = numeric_limits<ull>::max();
     ull sum = 0;
+
     for (size_t i = 0; i < sizes.size(); i++) {
         if (pt == MESC && i == primary_part) continue;
         if (sizes[i] > limit - sum) {

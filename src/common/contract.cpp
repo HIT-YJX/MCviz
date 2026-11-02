@@ -8,12 +8,16 @@ Thresholds parse_thresholds(const std::string& csv, unsigned) {
     return out;
 }
 
+
 QueryRequest effective_query(const Graph&, const BuildSpec& spec, const QueryRequest& query) {
     auto out = query;
     if (out.gamma.empty()) out.gamma = spec.beta;
     return out;
 }
 
+
+
+// Map the required vertex ID to its local position.
 Required local_required(const Graph& g, const QueryRequest& query) {
     if (!query.required) return {};
     const auto q = *query.required;

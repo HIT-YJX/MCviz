@@ -10,6 +10,7 @@ void CoreWorkspace::bind(const Graph& g, const Sets& domains, CoreMetrics* metri
     if (stamps_.size() != offsets_.back()) {
         stamps_.assign(offsets_.back(), 0);
         ids_.resize(offsets_.back());
+
         epoch_ = 0;
         if (metrics) ++metrics->map_initializations;
     }
@@ -28,6 +29,7 @@ void CoreWorkspace::bind(const Graph& g, const Sets& domains, CoreMetrics* metri
 
 std::optional<std::size_t> CoreWorkspace::find(Layer i, VertexPos u) const {
     auto pos = offsets_[i] + u;
+
     if (stamps_[pos] != epoch_) return std::nullopt;
     return ids_[pos];
 }
@@ -43,11 +45,15 @@ CoreResult reduce_queue(const Graph& g, const LayerPattern& p, const Thresholds&
     auto conditioned = condition_domains(g, p, std::move(domains), required);
     CoreResult out{std::move(conditioned.domains), conditioned.possible, 0, 0};
     if (!out.possible) return out;
+
     Thresholds lower = gamma;
+
     Sets mandatory(g.K);
     for (auto q : required) mandatory[q.layer].push_back(q.pos);
+
     for (Layer i = 0; i < g.K; ++i) {
         auto& a = mandatory[i];
+
         std::sort(a.begin(), a.end());
         a.erase(std::unique(a.begin(), a.end()), a.end());
         lower[i] = std::max<Score>(lower[i], a.size());
@@ -57,6 +63,7 @@ CoreResult reduce_queue(const Graph& g, const LayerPattern& p, const Thresholds&
     auto& map = workspace ? *workspace : local;
     map.bind(g, out.domains, metrics);
     std::vector<LocalVertex> vertices;
+
     std::vector<std::size_t> base{0};
     for (Layer i = 0; i < g.K; ++i) for (auto u : out.domains[i]) {
         vertices.push_back({i, u});
@@ -66,6 +73,7 @@ CoreResult reduce_queue(const Graph& g, const LayerPattern& p, const Thresholds&
     std::vector<Score> deg(base.back(), 0);
     struct Arc { std::size_t v, slot; };
     std::vector<Arc> arcs;
+
     std::vector<std::size_t> start(n + 1), bad(n, 0);
 
     std::vector<std::vector<std::size_t>> reverse(g.K);
@@ -83,9 +91,12 @@ CoreResult reduce_queue(const Graph& g, const LayerPattern& p, const Thresholds&
                 if (metrics) ++metrics->adjacency_scans;
                 auto id = map.find(j, v);
                 if (!id) continue;
+
                 ++deg[base[u] + s];
+
                 arcs.push_back({*id, base[*id] + reverse[x.layer][s]});
             }
+
             if (deg[base[u] + s] < lower[j]) ++bad[u];
         }
     }
@@ -101,17 +112,21 @@ CoreResult reduce_queue(const Graph& g, const LayerPattern& p, const Thresholds&
 
     for (std::size_t head = 0; head < queue.size(); ++head) {
         auto u = queue[head];
+
         alive[u] = 0;
         ++out.removed;
+
         if (metrics) ++metrics->queue_pops;
         auto threshold = lower[vertices[u].layer];
         for (auto e = start[u]; e < start[u + 1]; ++e) {
             auto a = arcs[e];
+
             if (!alive[a.v]) continue;
             auto old = deg[a.slot]--;
             if (metrics) ++metrics->degree_updates;
             if (old == threshold) {
                 ++bad[a.v];
+
                 if (!queued[a.v]) {
                     queued[a.v] = 1;
                     queue.push_back(a.v);

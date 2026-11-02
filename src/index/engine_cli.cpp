@@ -17,6 +17,7 @@ double seconds(Clock::time_point start) {
 
 int run_engine(int argc, char** argv, Engine engine) {
     const auto begin = Clock::now();
+
     CliCapabilities caps;
     caps.commands = {"construct", "query"};
     caps.cohesion_build = caps.solver = true;
@@ -32,6 +33,7 @@ std::cout << cli_help();
     const std::string name = engine == Engine::exact ? "MCviz" : "MCviz-plus";
     PatternIndex idx;
     auto path = opt.index_file;
+
     double build_seconds = 0;
     bool reused = false;
     if (opt.command == "construct") {
@@ -41,6 +43,7 @@ std::cout << cli_help();
             const auto& p = spec.pattern;
             bool dynamic = engine == Engine::exact && spec.objective == Objective::edge && !p.edges.empty() && p.connected();
             bool support = engine == Engine::upper && !p.star_centers().empty();
+
             if (dynamic || support) opt.build_threads = 32;
         }
         const auto paths = library_paths(opt, g, spec, name);
@@ -54,13 +57,16 @@ std::cout << cli_help();
             IndexOptions options;
             options.search.pivot_memory_bytes = opt.pivot_memory_bytes;
             options.build_threads = opt.build_threads;
+
             options.build_filter = opt.build_filter;
             options.cohesion_work_budget = opt.cohesion_work_budget;
             options.cohesion_cache_bytes = opt.cohesion_cache_bytes;
             const auto start = Clock::now();
             idx = PatternIndex::construct(g, spec, engine, options);
+
             build_seconds = seconds(start);
             path = opt.index_file.empty() ? paths.index : opt.index_file;
+
             std::filesystem::create_directories(std::filesystem::path(path).parent_path());
             idx.save(g, path);
         }
@@ -72,17 +78,21 @@ std::cout << cli_help();
         log_build(opt, idx.identity.spec, method, build_seconds, std::filesystem::file_size(path), reused);
         return 0;
     }
+
     if (path.empty()) {
         const auto spec = build_spec(opt);
+
         require(spec.objective == Objective::edge, "MCviz release indexes use the paper edge objective");
         const auto paths = library_paths(opt, g, spec, name);
         path = find_library_index(paths, g, spec, engine_name(engine));
     }
     idx = PatternIndex::load(g, path, engine);
     require(idx.identity.spec.objective == Objective::edge, "MCviz release queries use the paper edge objective");
+
     idx.options.search.pivot_memory_bytes = opt.pivot_memory_bytes;
     idx.options.query_heuristic_ms = opt.query_heuristic_ms;
     RunInfo run;
+
     const auto q = effective_query(g, idx.identity.spec, opt.query);
     const auto result = idx.query(g, q, run);
     const auto elapsed = seconds(begin);

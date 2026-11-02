@@ -4,6 +4,7 @@ ull StarCliqueFinder::compute_pattern_size(const vector<uint>& set_sizes,
                                             const vector<vector<bool>>& layer_pattern) const {
     if (problem_type == MESC) {
         ull total_edges = 0;
+
         for (uint i = 0; i < K; i++) {
             for (uint j = i + 1; j < K; j++) {
                 if (layer_pattern[i][j]) {
@@ -15,11 +16,14 @@ ull StarCliqueFinder::compute_pattern_size(const vector<uint>& set_sizes,
                 }
             }
         }
+
         return total_edges;
     }
     return compute_star_size(set_sizes, problem_type, primary_part);
 }
 
+
+// Require adjacency only when the pattern connects the two layers.
 bool StarCliqueFinder::motif_compatible(const MotifVertex& a,
                                          const MotifVertex& b,
                                          const vector<vector<bool>>& layer_pattern) const {
@@ -28,6 +32,8 @@ bool StarCliqueFinder::motif_compatible(const MotifVertex& a,
 
     return g.has_edge(a.part, a.vex, b.part, b.vex);
 }
+
+
 
 // Pivot over candidate and excluded sets to enumerate maximal compatible sets.
 // With n vertices, depth d and B visited states, a conservative time bound is
@@ -42,6 +48,7 @@ void StarCliqueFinder::motif_online_dfs(vector<vector<uint>>& current_sets,
 
     vector<uint> current_sizes(K, 0);
     vector<uint> candidate_sizes(K, 0);
+
     for (uint p = 0; p < K; p++) current_sizes[p] = current_sets[p].size();
     for (const auto& v : candidates) candidate_sizes[v.part]++;
 
@@ -58,6 +65,7 @@ void StarCliqueFinder::motif_online_dfs(vector<vector<uint>>& current_sets,
                     break;
                 }
             }
+
             if (feasible && contains_required(current_sets)) {
                 ull cur_size = compute_pattern_size(current_sizes, layer_pattern);
                 if (!best_result.found || cur_size > best_result.size) {
@@ -82,6 +90,7 @@ void StarCliqueFinder::motif_online_dfs(vector<vector<uint>>& current_sets,
         for (const auto& v : candidates) {
             if (!same_vertex(p, v) && motif_compatible(p, v, layer_pattern)) cover++;
         }
+
         if (!has_pivot || cover > best_cover) {
             has_pivot = true;
             pivot = p;
@@ -90,6 +99,7 @@ void StarCliqueFinder::motif_online_dfs(vector<vector<uint>>& current_sets,
     };
 
     for (const auto& v : candidates) consider_pivot(v);
+
     for (const auto& v : excluded) consider_pivot(v);
 
     vector<MotifVertex> iteration_order;
@@ -102,6 +112,7 @@ void StarCliqueFinder::motif_online_dfs(vector<vector<uint>>& current_sets,
 
     auto compatible_degree = [&](const MotifVertex& p) {
         size_t degree = 0;
+
         for (const auto& v : candidates) {
             if (!same_vertex(p, v) && motif_compatible(p, v, layer_pattern)) degree++;
         }
@@ -114,6 +125,7 @@ void StarCliqueFinder::motif_online_dfs(vector<vector<uint>>& current_sets,
              size_t db = compatible_degree(b);
              if (da != db) return da > db;
              if (a.part != b.part) return a.part < b.part;
+
              return a.vex < b.vex;
          });
 
@@ -146,8 +158,11 @@ void StarCliqueFinder::motif_online_dfs(vector<vector<uint>>& current_sets,
     }
 }
 
+
+// Peel unsupported vertices and search anchored motif regions for the maximum.
 StarClique StarCliqueFinder::find_max_pattern_clique_motif_online(const vector<vector<bool>>& layer_pattern) {
     best = StarClique(K);
+
     num_branches = 0;
 
 
@@ -162,6 +177,7 @@ StarClique StarCliqueFinder::find_max_pattern_clique_motif_online(const vector<v
                 for (uint q = 0; q < K; q++) {
                     if (!layer_pattern[p][q]) continue;
                     bool supported = false;
+
                     for (uint v : g.full_adj[p][u][q]) {
                         if (keep[q][v]) { supported = true; break; }
                     }
@@ -207,16 +223,20 @@ StarClique StarCliqueFinder::find_max_pattern_clique_motif_online(const vector<v
         }
 
         vector<uint> reachable(K, 0);
+
         for (uint p = 0; p < K; p++) reachable[p] = current_sets[p].size();
+
         for (const auto& v : candidates) reachable[v.part]++;
 
         bool enough = true;
         for (uint p = 0; p < K; p++) {
             if (reachable[p] < thresholds[p]) {
                 enough = false;
+
                 break;
             }
         }
+
         if (!enough) continue;
 
         motif_online_dfs(current_sets, candidates, excluded, layer_pattern, global_best);

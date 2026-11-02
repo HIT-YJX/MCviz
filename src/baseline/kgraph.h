@@ -20,6 +20,7 @@ public:
     uint num_vertices_total;
     ull num_edges;
 
+    // Initialize an empty graph with zero vertices and edges.
     KPartiteGraph() : K(0), num_vertices_total(0), num_edges(0) {}
 
     void init(uint k);

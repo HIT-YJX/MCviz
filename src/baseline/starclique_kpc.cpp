@@ -3,6 +3,7 @@
 vector<vector<bool>> StarCliqueFinder::kpc_layer_degree_prune(
         const vector<vector<bool>>& layer_pattern) const {
     vector<vector<bool>> keep(K);
+
     for (uint p = 0; p < K; p++) {
         keep[p].assign(g.vertex_ids[p].size(), true);
     }
@@ -15,10 +16,12 @@ vector<vector<bool>> StarCliqueFinder::kpc_layer_degree_prune(
                 if (!keep[p][v]) continue;
 
                 bool remove = false;
+
                 for (uint q = 0; q < K && !remove; q++) {
                     if (q == p || !layer_pattern[p][q] || thresholds[q] == 0) continue;
 
                     uint kept_neighbors = 0;
+
                     for (uint nb : g.full_adj[p][v][q]) {
                         if (nb < keep[q].size() && keep[q][nb]) kept_neighbors++;
                     }
@@ -36,6 +39,7 @@ vector<vector<bool>> StarCliqueFinder::kpc_layer_degree_prune(
     return keep;
 }
 
+
 bool StarCliqueFinder::kpc_vertex_compatible_with_sets(
         const KpcVertex& v,
         const vector<vector<uint>>& current_sets,
@@ -49,6 +53,7 @@ bool StarCliqueFinder::kpc_vertex_compatible_with_sets(
     return true;
 }
 
+
 bool StarCliqueFinder::kpc_seed_compatible(
         const vector<vector<uint>>& seed_sets,
         uint part,
@@ -57,6 +62,8 @@ bool StarCliqueFinder::kpc_seed_compatible(
     KpcVertex v{part, vex};
     return kpc_vertex_compatible_with_sets(v, seed_sets, layer_pattern);
 }
+
+
 
 vector<StarCliqueFinder::KpcVertex> StarCliqueFinder::kpc_collect_candidates(
         const vector<vector<uint>>& current_sets,
@@ -71,12 +78,14 @@ vector<StarCliqueFinder::KpcVertex> StarCliqueFinder::kpc_collect_candidates(
             if (v <= seed_lower_bound[p]) continue;
 
             bool already_selected = false;
+
             for (uint selected : current_sets[p]) {
                 if (selected == v) {
                     already_selected = true;
                     break;
                 }
             }
+
             if (already_selected) continue;
 
             KpcVertex candidate{p, v};
@@ -90,8 +99,11 @@ vector<StarCliqueFinder::KpcVertex> StarCliqueFinder::kpc_collect_candidates(
         if (a.part != b.part) return a.part < b.part;
         return a.vex < b.vex;
     });
+
     return candidates;
 }
+
+
 
 // Expand each layer's minimum seed using larger compatible vertices only.
 // Total time sums compatibility checks and candidate copies over visited states;
@@ -113,9 +125,11 @@ void StarCliqueFinder::kpc_expand(
     for (const auto& v : candidates) candidate_sizes[v.part]++;
 
     bool feasible_now = true;
+
     for (uint p = 0; p < K; p++) {
         if (current_sizes[p] < thresholds[p]) {
             feasible_now = false;
+
             break;
         }
     }
@@ -124,6 +138,7 @@ void StarCliqueFinder::kpc_expand(
         if (!best_result.found || cur_size > best_result.size) {
             best_result.size = cur_size;
             best_result.sets = current_sets;
+
             best_result.found = true;
         }
     }
@@ -135,6 +150,7 @@ void StarCliqueFinder::kpc_expand(
     }
 
     ull ub = compute_pattern_size(max_sizes, layer_pattern);
+
     if (best_result.found && ub <= best_result.size) return;
 
     for (size_t i = 0; i < candidates.size(); i++) {
@@ -143,8 +159,10 @@ void StarCliqueFinder::kpc_expand(
 
         vector<KpcVertex> next_candidates;
         next_candidates.reserve(candidates.size() - i - 1);
+
         for (size_t j = i + 1; j < candidates.size(); j++) {
             const KpcVertex& cand = candidates[j];
+
             if (motif_compatible(chosen, cand, layer_pattern)) {
                 next_candidates.push_back(cand);
             }
@@ -167,10 +185,13 @@ void StarCliqueFinder::kpc_expand(
         }
 
         current_sets[chosen.part].pop_back();
+
         if (best_result.found && best_result.size >= ub) return;
     }
 }
 
+
+// Enumerate compatible layer seeds, then expand each completed seed.
 void StarCliqueFinder::kpc_enumerate_seeds(
         size_t depth,
         const vector<uint>& layer_order,
@@ -194,6 +215,7 @@ void StarCliqueFinder::kpc_enumerate_seeds(
     uint p = layer_order[depth];
     for (uint v = 0; v < keep[p].size(); v++) {
         if (!keep[p][v]) continue;
+
         if (!kpc_seed_compatible(seed_sets, p, v, layer_pattern)) continue;
 
         seed_sets[p].push_back(v);
@@ -206,10 +228,12 @@ void StarCliqueFinder::kpc_enumerate_seeds(
 StarClique StarCliqueFinder::find_max_pattern_clique_kpc_online(
         const vector<vector<bool>>& layer_pattern) {
     best = StarClique(K);
+
     num_branches = 0;
 
 
     vector<vector<bool>> keep = kpc_layer_degree_prune(layer_pattern);
+
     for (uint p = 0; p < K; p++) {
         bool has_vertex = false;
         for (bool kept : keep[p]) {

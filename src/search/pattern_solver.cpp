@@ -24,6 +24,7 @@ RegionResult solve_cover_region(const Graph& g, const LayerPattern& p, Objective
     out.backend = options.reviewed_rules ? "cover_reviewed" : "cover_generic";
     out.cutoff_applied = cutoff.has_value();
     out.best.sets.resize(g.K);
+
     CoreResult core;
     if (options.research_skip_initial_core) {
         auto conditioned = condition_domains(g, p, std::move(domains), required);
@@ -31,8 +32,10 @@ RegionResult solve_cover_region(const Graph& g, const LayerPattern& p, Objective
         core.possible = conditioned.possible && enough_capacity(core.domains, gamma);
     } else {
         core = reduce(g, p, gamma, std::move(domains), required, options.core_backend, options.core_workspace);
+
         out.stats.pa01_calls = 1;
     }
+
     out.stats.core_removed = core.removed;
     if (!core.possible) {
         out.best.status = cutoff ? Status::incomplete : Status::infeasible;
@@ -41,15 +44,20 @@ RegionResult solve_cover_region(const Graph& g, const LayerPattern& p, Objective
     auto cover = choose_cover(p, core.domains, required, options.reviewed_rules);
     out.stats.pa04_calls = options.reviewed_rules ? 1 : 0;
     std::uint64_t rule_budget = options.reviewed_work_budget;
+
     bool upper_eligible = !p.edges.empty() && (obj == Objective::balanced || (p.edges.size() == p.K - 1 && p.connected()));
+
     State root{std::move(core.domains), Sets(g.K), 0};
     for (auto q : required) root.selected[q.layer].push_back(q.pos);
+
     for (auto& c : root.selected) {
         std::sort(c.begin(), c.end());
+
         c.erase(std::unique(c.begin(), c.end()), c.end());
     }
     std::vector<State> stack;
     stack.push_back(std::move(root));
+
     while (!stack.empty()) {
         if (exhausted(options, out.stats.nodes)) { out.complete = false; break; }
         State st = std::move(stack.back());
@@ -64,15 +72,19 @@ RegionResult solve_cover_region(const Graph& g, const LayerPattern& p, Objective
             Required mandatory;
             for (Layer i = 0; i < g.K; ++i) for (auto u : st.selected[i]) mandatory.push_back({i, u});
             Thresholds lower = gamma;
+
             if (limit) {
                 ++out.stats.pa09_calls;
+
                 lower = improving_thresholds(p, obj, st.domains, gamma, st.selected, *limit);
                 if (!enough_capacity(st.domains, lower)) { ++out.stats.pa09_prunes; continue; }
                 if (lower != gamma) {
                     auto peeled = reduce(g, p, lower, std::move(st.domains), mandatory,
                                          options.core_backend, options.core_workspace);
                     ++out.stats.pa01_calls;
+
                     out.stats.core_removed += peeled.removed;
+
                     st.domains = std::move(peeled.domains);
                     if (!peeled.possible) { ++out.stats.pa09_prunes; continue; }
                     ub = capacity_bound(p, obj, st.domains);
@@ -87,6 +99,7 @@ RegionResult solve_cover_region(const Graph& g, const LayerPattern& p, Objective
                     out.stats.pa08_tree_calls += upper.tree_used;
                     out.stats.pa08_core_calls += upper.core_used;
                     out.stats.pa08_budget_fallbacks += upper.budget_fallback;
+
                     if (!upper.possible || (limit && upper.upper <= *limit)) { ++out.stats.pa08_prunes; continue; }
                 }
             }
@@ -101,12 +114,15 @@ RegionResult solve_cover_region(const Graph& g, const LayerPattern& p, Objective
                     break;
                 }
             }
+
             if (next) break;
             ++st.layer;
         }
         if (!next) {
             ++out.stats.leaves;
+
             Score value = capacity_bound(p, obj, st.domains);
+
             SearchResult r{true, value, std::move(st.domains), Status::optimal, {}};
 
             out.best = std::move(r);
@@ -115,12 +131,14 @@ RegionResult solve_cover_region(const Graph& g, const LayerPattern& p, Objective
 
         auto u = *next;
         State skip = st;
+
         auto& skipped = skip.domains[u.layer];
         skipped.erase(std::lower_bound(skipped.begin(), skipped.end(), u.pos));
         stack.push_back(std::move(skip));
         auto& selected = st.selected[u.layer];
         selected.insert(std::lower_bound(selected.begin(), selected.end(), u.pos), u.pos);
         bool valid = true;
+
         for (auto j : p.neighbors[u.layer]) {
             auto& d = st.domains[j];
             d.erase(std::remove_if(d.begin(), d.end(), [&](VertexPos v) {
@@ -133,6 +151,7 @@ RegionResult solve_cover_region(const Graph& g, const LayerPattern& p, Objective
     if (!out.complete) out.best.status = Status::incomplete;
     else if (out.best.found) out.best.status = Status::optimal;
     else out.best.status = cutoff ? Status::incomplete : Status::infeasible;
+
     if (out.complete && cutoff && !out.best.found) out.best.message = "Region complete: no strict improvement above cutoff";
     return out;
 }

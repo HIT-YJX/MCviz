@@ -14,6 +14,8 @@ struct Timer {
     double& value;
     Clock::time_point start = Clock::now();
     explicit Timer(double& ms) : value(ms) {}
+
+
     ~Timer() { value += std::chrono::duration<double, std::milli>(Clock::now() - start).count(); }
 };
 
@@ -26,6 +28,7 @@ std::uint64_t add(std::uint64_t a, std::uint64_t b) {
 // Counted arrays may exceed the reporting range; O(1), no allocation.
 std::uint64_t mul(std::uint64_t n, std::uint64_t bytes) {
     const auto limit = std::numeric_limits<std::uint64_t>::max();
+
     return bytes && n > limit / bytes ? limit : n * bytes;
 }
 
@@ -48,8 +51,10 @@ std::uint64_t core_bytes(unsigned k, std::size_t edges, std::uint64_t n,
     bytes = add(bytes, mul(n, sizeof(LocalVertex) + 2 * sizeof(VertexPos) + 2));
     bytes = add(bytes, mul(add(mul(4, n), 2), sizeof(std::size_t)));
     bytes = add(bytes, mul(metrics.slots, sizeof(Score)));
+
     bytes = add(bytes, mul(metrics.arcs, 2 * sizeof(std::size_t)));
     bytes = add(bytes, mul(mul(2, edges), sizeof(std::size_t)));
+
     return add(bytes, 2 * (sizeof(VertexPos) + sizeof(LocalVertex)));
 }
 } // namespace
@@ -69,7 +74,9 @@ PatternEdgeDomains::PatternEdgeDomains(const Graph& g, const LayerPattern& p,
     for (const auto& a : g.vertex_ids) original_vertices_ = add(original_vertices_, a.size());
     auto persistent = add(sizeof(*this), mul(beta_.capacity(), sizeof(Score)));
     persistent = add(persistent, mul(base_.capacity(), sizeof(std::vector<VertexPos>)));
+
     for (const auto& a : base_) persistent = add(persistent, mul(a.capacity(), sizeof(VertexPos)));
+
     if (shared) {
         adjacency_ = std::move(shared);
         counters_.shared_adjacency_logical_bytes = adjacency_->logical_bytes();
@@ -89,6 +96,7 @@ PatternEdgeDomains::~PatternEdgeDomains() = default;
 // Read-only readiness; O(1). A missing cache never makes a domain incomplete.
 bool PatternEdgeDomains::cache_ready() const { return adjacency_->ready(); }
 
+
 // Conditioning and queue peeling each retain every witness containing the edge.
 // The first deleted witness vertex would still have all its required neighbors,
 // contradicting its deficient degree. This argument uses arbitrary P, not its shape.
@@ -97,8 +105,10 @@ bool PatternEdgeDomains::cache_ready() const { return adjacency_->ready(); }
 // across this serial batch; every returned domain remains explicit and complete.
 CoreResult PatternEdgeDomains::get(const GraphEdge& e) {
     Timer total(timing_.get_ms);
+
     graph_.get_id(e.u.layer, e.u.pos);
     graph_.get_id(e.v.layer, e.v.pos);
+
     Required required{e.u, e.v};
     counters_.requests = add(counters_.requests, 1);
     if (adjacency_->ready() && contains_required(base_, required))
@@ -130,6 +140,7 @@ CoreResult PatternEdgeDomains::get(const GraphEdge& e) {
         counters_.core_removed = add(counters_.core_removed, out.removed);
         counters_.adjacency_scans = add(counters_.adjacency_scans, metrics.adjacency_scans);
         counters_.degree_updates = add(counters_.degree_updates, metrics.degree_updates);
+
         counters_.queue_pops = add(counters_.queue_pops, metrics.queue_pops);
         counters_.map_initializations = add(counters_.map_initializations, metrics.map_initializations);
         counters_.peak_core_slots = std::max(counters_.peak_core_slots, metrics.slots);
@@ -149,10 +160,12 @@ CoreResult PatternEdgeDomains::get(const GraphEdge& e) {
     // Explicit output and a conservative condition scratch allowance are separate
     // from the adjacency cache. These estimates do not impose a process RSS limit.
     auto condition_bytes = mul(counters_.base_vertices, 2 * sizeof(VertexPos) + sizeof(std::uint64_t));
+
     condition_bytes = add(condition_bytes, mul(graph_.K,
         2 * sizeof(std::vector<VertexPos>) + sizeof(std::uint64_t) + sizeof(unsigned char)));
     auto temp = std::max(condition_bytes, counters_.core_peak_bytes_estimate);
     auto peak = add(counters_.persistent_logical_bytes, counters_.workspace_bytes_estimate);
+
     counters_.peak_bytes_estimate = std::max(counters_.peak_bytes_estimate, add(peak, temp));
     return out;
 }

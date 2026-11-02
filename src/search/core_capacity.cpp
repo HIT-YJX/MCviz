@@ -21,29 +21,36 @@ CoreCapacity::CoreCapacity(const Graph& g, const BuildSpec& spec, const Sets& co
         auto i = e.u.layer, j = e.v.layer;
         if (!p.adjacent(i, j)) continue;
         auto u = ids[i][e.u.pos], v = ids[j][e.v.pos];
+
         if (u == missing || v == missing) continue;
         auto a = std::lower_bound(p.neighbors[i].begin(), p.neighbors[i].end(), j) - p.neighbors[i].begin();
+
         auto b = std::lower_bound(p.neighbors[j].begin(), p.neighbors[j].end(), i) - p.neighbors[j].begin();
         ++deg[u][a]; ++deg[v][b];
     }
+
     auto centers = p.star_centers();
     if (!centers.empty() && objective == Objective::edge) {
         center = centers.front(); totals.resize(deg.size());
         for (auto u : core[*center]) {
             auto id = ids[*center][u];
+
             bool possible = true;
             for (std::size_t t = 0; t < deg[id].size(); ++t) {
                 if (deg[id][t] < beta[p.neighbors[*center][t]]) possible = false;
                 totals[id] = checked_add(totals[id], deg[id][t]);
             }
+
             if (!possible) totals[id] = 0;
         }
     }
     enabled = true;
 }
 
+
 Score CoreCapacity::bound(const GraphEdge& edge) const {
     const auto missing = std::numeric_limits<std::size_t>::max();
+
     auto u = edge.u, v = edge.v;
     if (ids[u.layer][u.pos] == missing || ids[v.layer][v.pos] == missing) return 0;
     if (center) {

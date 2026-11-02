@@ -18,6 +18,7 @@ double seconds(Clock::time_point start) {
 int main(int argc, char** argv) {
     const auto began = Clock::now();
     mcviz::CliCapabilities caps;
+
     caps.commands = {"solve", "construct", "query"};
     caps.method = true;
     caps.min_layers = true;
@@ -27,10 +28,13 @@ std::cout << mcviz::cli_help();
         return 0;
     }
     const auto g = mcviz::Graph::load(opt.layers, opt.graph_file, opt.vertices_file);
+
     mcviz::BuildSpec spec;
     mcviz::baseline::BcvizmIndex index;
     auto path = opt.index_file;
+
     bool reused = false;
+
     double build_s = 0;
 
     if (opt.command == "query") {
@@ -46,6 +50,7 @@ std::cout << mcviz::cli_help();
         if (opt.method == "bcvizm") {
             if (opt.command == "construct") {
                 const auto paths = mcviz::library_paths(opt, g, spec, "BCviz-M");
+
                 auto existing = !path.empty() && std::filesystem::exists(path) ? path
                     : mcviz::find_library_index(paths, g, spec, "BCviz-M-LP", "safe-upper");
                 if (!existing.empty()) {
@@ -75,6 +80,7 @@ std::cout << mcviz::cli_help();
             path = opt.index_file;
         }
         mcviz::log_build(opt, spec, opt.method, build_s, std::filesystem::file_size(path), reused);
+
         return 0;
     }
 

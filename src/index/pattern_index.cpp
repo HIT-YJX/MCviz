@@ -15,6 +15,7 @@ namespace mcviz {
 const char* engine_name(Engine e) { return e == Engine::exact ? "MCviz-LP" : "MCviz+-LP"; }
 
 
+// Label the query route selected for this pattern.
 std::string PatternIndex::query_execution_path() const {
     const auto& p = identity.spec.pattern;
     if (p.edges.empty()) return "empty_pattern";
@@ -27,6 +28,7 @@ namespace {
 double elapsed_ms(std::chrono::steady_clock::time_point start) {
     return std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 }
+
 
 
 void add_stats(SolverStats& a, const SolverStats& b) { merge_solver_stats(a,b); }
@@ -47,14 +49,18 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
         idx.options.search.backend = RegionBackend::pivot_ordered;
         idx.source_graph_sha256 = g.graph_source_sha256;
         idx.source_vertices_sha256 = g.vertices_source_sha256;
+
         idx.bound = "exact";
+
         idx.identity = {schema_version, contract_version, engine_name(engine), idx.bound,
                         g.hash(), spec.pattern.hash(), spec};
         idx.execution_path = idx.query_execution_path();
         idx.build_strategy = "general-dynamic-all";
         auto core = reduce(g, spec.pattern, spec.beta, g.all_vertices(), {}, CoreBackend::queue);
         idx.core_domains = std::move(core.domains);
+
         std::vector<Score> values(g.edges.size());
+
         if (core.possible) {
             auto result = build_pattern_dynamic(g, spec.pattern, spec.beta, idx.core_domains,
                 options.build_threads, options.cohesion_cache_bytes, options.cohesion_work_budget,
@@ -68,15 +74,21 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
         return idx;
     }
     bool star = !spec.pattern.star_centers().empty();
+
     bool fast = star && options.solver == "auto" && !options.search.deadline && !options.search.node_limit;
     PatternIndex idx;
+
     idx.engine = engine;
+
     idx.options = options;
     idx.options.search.reviewed_rules = options.solver == "auto";
+
     idx.options.search.backend = options.solver == "auto" ? RegionBackend::pivot_ordered : RegionBackend::cover;
     idx.source_graph_sha256 = g.graph_source_sha256;
+
     idx.source_vertices_sha256 = g.vertices_source_sha256;
     idx.bound = engine == Engine::exact ? "exact" : "auto";
+
     if (idx.bound == "auto") {
         idx.bound = fast ? "star-support" : "capacity";
         if (!star && options.solver == "auto" && spec.pattern.connected()) {
@@ -114,13 +126,16 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
     if (support_build) {
         idx.build_counters["support_requested_threads"] = options.build_threads;
         idx.build_counters["support_reuse_requested"] = true;
+
         idx.build_counters["support_cache_budget_bytes"] = options.support_cache_bytes;
     }
     idx.build_counters["build_queue_core"] = options.build_core_backend == CoreBackend::queue;
     auto started = std::chrono::steady_clock::now();
+
     auto core = reduce(g, p, spec.beta, g.all_vertices(), {},
                        options.build_core_backend);
     idx.build_timing["build_core_ms"] = elapsed_ms(started);
+
     idx.core_domains = std::move(core.domains);
     idx.build_stats.core_removed = core.removed;
     idx.build_stats.pa01_calls = 1;
@@ -130,8 +145,10 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
     const auto& domains = filtered.domains;
     core.possible = filtered.possible;
     bool prepared = engine == Engine::upper && optimized && core.possible && idx.bound == "star-support";
+
     if (prepared) {
         started = std::chrono::steady_clock::now();
+
         auto view = prepare_star_build(g, p, domains);
         idx.build_timing["build_view_ms"] = elapsed_ms(started);
         idx.build_counters["build_prepared_adjacency"] = 1;
@@ -150,6 +167,7 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
         for (std::size_t id = 0; id < g.edges.size(); ++id) {
             const auto& e = g.edges[id];
             if (!p.adjacent(e.u.layer, e.v.layer)) continue;
+
             Score value = 0;
             if (active < view.source_edge_ids.size() && view.source_edge_ids[active] == id)
                 value = values[active++];
@@ -158,17 +176,23 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
         idx.build_timing["build_weights_ms"] = elapsed_ms(started);
     } else {
         started = std::chrono::steady_clock::now();
+
         std::optional<CoreCapacity> capacities;
         if (core.possible && engine == Engine::upper && options.build_capacity_degrees &&
             (idx.bound == "capacity")) capacities.emplace(g, spec, domains);
         idx.build_counters["build_capacity_degrees"] = capacities && capacities->ready();
+
         idx.build_timing["build_capacity_prepare_ms"] = elapsed_ms(started);
+
         idx.build_timing["build_view_ms"] += idx.build_timing["build_capacity_prepare_ms"];
+
         started = std::chrono::steady_clock::now();
         for (std::size_t id = 0; id < g.edges.size(); ++id) {
             const auto& e = g.edges[id];
             if (!p.adjacent(e.u.layer, e.v.layer)) continue;
+
             if (!filtered.keep_edges.empty() && !filtered.keep_edges[id]) ++idx.build_counters["build_filter_skipped_edge_calls"];
+
             Required fixed{e.u, e.v};
             Score value = 0;
             if (core.possible && (filtered.keep_edges.empty() || filtered.keep_edges[id]) &&
@@ -199,6 +223,7 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
             }
             idx.weights.push_back({e, value});
         }
+
         idx.build_timing["build_weights_ms"] = elapsed_ms(started);
         idx.build_counters["build_exact_edge_calls"] = idx.build_solver_calls;
     }

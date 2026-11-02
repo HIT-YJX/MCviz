@@ -19,10 +19,15 @@ namespace mcviz {
 namespace {
 using Clock=std::chrono::steady_clock;
 double ms(Clock::time_point start) { return std::chrono::duration<double,std::milli>(Clock::now()-start).count(); }
+
 std::uint64_t vertices(const Sets& d) { std::uint64_t n=0; for (const auto& x:d) n+=x.size(); return n; }
+
+
+
 std::uint64_t key_bytes(const Sets& d) {
     std::uint64_t n=128+sizeof(Sets)+d.capacity()*sizeof(std::vector<VertexPos>);
     for (const auto& x:d) n+=x.capacity()*sizeof(VertexPos);
+
     return n;
 }
 struct Worker {
@@ -55,9 +60,16 @@ public:
         if(budget<overhead) return;
         { shards_=std::make_unique<Shard[]>(count);used_.store(overhead); }
     }
+
     bool ready() const { return bool(shards_); }
+
+
     std::uint64_t bytes() const { return used_.load(std::memory_order_relaxed); }
+
     std::size_t size() const { return ready()?count:0; }
+
+
+
     // Layer sizes delimit the original-position lists. Collisions affect only
     // lock sharing, never equivalence; no key storage or allocation is needed.
     std::size_t shard(const Sets& d) const {
@@ -68,6 +80,7 @@ public:
         h^=h>>33;h*=0xff51afd7ed558ccdULL;h^=h>>33;
         return h%count;
     }
+
     bool get(std::size_t s,const Sets& d,Score& value,unsigned owner,bool& foreign) {
         if(!ready()) return false;
         auto& part=shards_[s];
@@ -77,6 +90,7 @@ public:
         value=at->second.value;foreign=at->second.owner!=owner;
         return true;
     }
+
     // Reserve from one total logical byte budget while holding one shard lock.
     // Duplicate completion consumes no cache budget.
     // No waiting dependency or partially solved cache entry is ever installed.
@@ -90,6 +104,7 @@ public:
         }
         const auto bytes=key_bytes(d);
         auto used=used_.load(std::memory_order_relaxed);
+
         do {
             if(bytes>budget_-used) return Insert::refused;
         } while(!used_.compare_exchange_weak(used,used+bytes,std::memory_order_relaxed));
@@ -132,10 +147,14 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
     std::uint64_t pivot_memory_bytes) {
     const auto started=Clock::now();
     const auto cpu_started=std::clock();
+
     PatternReuseBuildResult out;
     out.value_kind="exact"; out.values.resize(g.edges.size());
+
     out.counters["dynamic_fusion_enabled"]=true;
+
     out.counters["dynamic_beta_reduction_enabled"]=true;
+
     out.counters["dynamic_partner_enabled"]=true;
     out.counters["dynamic_adjacency_enabled"]=true;
     out.counters["dynamic_score_cache_enabled"]=true;
@@ -145,8 +164,11 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
     const auto score_budget=memory-memory/4-memory/4;
     SharedScores scores(score_budget);
     out.counters["dynamic_shared_cache_enabled"]=true;
+
     out.counters["dynamic_shared_cache_shards"]=scores.size();
+
     out.counters["dynamic_shared_cache_budget_bytes"]=score_budget;
+
     std::vector<std::atomic<Score>> lower(g.edges.size());
     for(auto& x:lower) x.store(0,std::memory_order_relaxed);
     auto begin=Clock::now();
@@ -157,9 +179,11 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
     CoreWorkspace global_workspace;
     PartnerStats global;
     CoreResult reduced;
+
     reduced.possible=enough_capacity(base,beta);
     {
         reduced=partners.reduce(beta,base,{},partner_work,global,global_workspace);
+
         base=std::move(reduced.domains);
     }
     out.counters["dynamic_partner_ready"]=partners.ready();
@@ -171,6 +195,7 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
     out.timing["dynamic_global_partner_ms"]=ms(begin);
 
     auto shared=std::make_shared<const PatternAdjacency>(g,p,base,true,memory/4);
+
     out.counters["dynamic_adjacency_ready"]=shared->ready();
     out.counters["dynamic_shared_bytes"]=partners.bytes()+shared->logical_bytes();
     out.timing["dynamic_adjacency_prepare_ms"]=shared->prepare_ms();
@@ -203,6 +228,7 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
                 const auto edge_start=Clock::now();
                 
                 auto phase=Clock::now();
+
                 auto d=domains.get(edge); w.domain_ms+=ms(phase);
                 Score value=0; bool hit=false;
                 double solver_ms=0;
@@ -223,10 +249,13 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
                     // Any feasible tuple in D can add them, so optimum(D) equals
                     // the anchored optimum. Exact full-D keys safely share values.
                     std::size_t shard=0;
+
                     bool foreign=false;
                     {
                         const auto key_start=Clock::now();
+
                         shard=scores.ready()?scores.shard(d.domains):0;
+
                         ++w.cache_lookups;
                         hit=scores.get(shard,d.domains,value,t,foreign);
                         w.key_ms+=ms(key_start);
@@ -238,7 +267,9 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
                         const Score upper=capacity_bound(p,Objective::edge,d.domains);
                         bool resolved=incumbent==upper;
                         if(resolved) { value=incumbent;++w.certified; }
+
                         Sets improved;
+
                         Thresholds thresholds=beta;
                         bool restricted=false;
                         if(!resolved) {
@@ -249,23 +280,29 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
                             restricted=thresholds!=beta;
                             if(restricted) {
                                 ++w.improvement_raised;++w.improvement_core;
+
                                 auto r=reduce_queue(g,p,thresholds,d.domains,fixed,&workspace,nullptr);
                                 resolved=!r.possible || capacity_bound(p,Objective::edge,r.domains)<=incumbent;
                                 improved=std::move(r.domains);
+
                                 if(resolved) { value=incumbent;++w.improvement_rejected; }
                             }
+
                             w.improvement_ms+=ms(phase);
                         }
+
                         if(!resolved) {
                              phase=Clock::now();
                             
                             SolverOptions options; options.reviewed_rules=true; options.research_skip_initial_core=true;
                             options.backend=RegionBackend::pivot_ordered;options.pivot_memory_bytes=pivot_memory_bytes;
                             options.core_backend=CoreBackend::queue; options.core_workspace=&workspace;
+
                             const auto cutoff=std::optional<Score>(incumbent);
                             auto r=solve_region(g,p,Objective::edge,thresholds,restricted?improved:d.domains,fixed,cutoff,options);
                             value=std::max(incumbent,r.best.found?r.best.score:0); nodes=r.stats.nodes;
                             ++w.calls;w.nodes+=nodes;solver_ms=ms(phase);w.solver_ms+=solver_ms;
+
                             {
                                 ++w.warm;w.warm_positive+=incumbent>0;w.no_improvement+=!r.best.found;
                                 publish(g,p,r.best,lower,w);
@@ -292,19 +329,23 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
                 }
                 out.values[id]=value;
                 if(!value)++w.zero;
+
                 const auto edge_ms=ms(edge_start);w.edge_ms+=edge_ms;++w.completed;
                 
                 
             }
             w.local_core_calls=domains.counters().core_calls;w.local_core_removed=domains.counters().core_removed;
             w.local_core_scans=domains.counters().adjacency_scans;
+
             w.sparse_requests=domains.counters().sparse_requests;
         }
     };
+
     std::vector<std::thread> pool;
     { for(unsigned t=0;t+1<threads;++t) pool.emplace_back(run,t); run(threads-1); }
     for(auto& x:pool)x.join();
     out.timing["dynamic_compute_wall_ms"]=ms(compute_started);
+
     out.counters["pattern_threads_started"]=threads;
     out.counters["pivot_memory_bytes_per_region"]=pivot_memory_bytes;
     for(unsigned t=0;t<threads;++t) {
@@ -313,12 +354,16 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
         out.timing["worker_"+std::to_string(t)+"_edge_sum_ms"]=w.edge_ms;
         accumulate_backend_counters(out.counters,w.solver_stats);
         out.counters["pattern_solver_calls"]+=w.calls;out.counters["pattern_solver_nodes"]+=w.nodes;
+
         out.counters["pattern_cache_hits"]+=w.hits;out.counters["pattern_cache_entries"]+=w.entries;
+
         out.counters["pattern_cache_refusals"]+=w.cache_refused;
+
         {
             out.counters["dynamic_shared_cache_lookups"]+=w.cache_lookups;
             out.counters["dynamic_shared_cache_hits"]+=w.hits;
             out.counters["dynamic_shared_cache_misses"]+=w.cache_lookups-w.hits;
+
             out.counters["dynamic_shared_cache_inserts"]+=w.entries;
             out.counters["dynamic_shared_cache_duplicate_inserts"]+=w.cache_duplicates;
             out.counters["dynamic_shared_cache_refusals"]+=w.cache_refused;
@@ -331,6 +376,7 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
         out.counters["pattern_warm_cutoff_no_improvement"]+=w.no_improvement;
         out.counters["pattern_published_witnesses"]+=w.published;
         out.counters["pattern_publications"]+=w.publications;
+
         out.counters["pattern_improvement_core_calls"]+=w.improvement_core;
         out.counters["pattern_improvement_raised_edges"]+=w.improvement_raised;
         out.counters["pattern_improvement_saved_solver_calls"]+=w.improvement_rejected;
@@ -340,6 +386,7 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
         out.counters["dynamic_local_core_scans"]+=w.local_core_scans;
         out.counters["domain_sparse_requests"]+=w.sparse_requests;
         out.counters["dynamic_local_partner_work"]+=w.partner.work;
+
         out.counters["dynamic_local_partner_removed"]+=w.partner.removed;
         out.counters["dynamic_local_partner_core_removed"]+=w.partner.core_removed;
         out.counters["dynamic_local_partner_budget_stops"]+=w.partner.budget_stops;
@@ -347,10 +394,12 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
         out.timing["dynamic_edge_sum_ms"]+=w.edge_ms;out.timing["dynamic_solver_sum_ms"]+=w.solver_ms;
         out.timing["dynamic_partner_sum_ms"]+=w.partner_ms;out.timing["dynamic_domains_sum_ms"]+=w.domain_ms;
         out.timing["dynamic_publish_sum_ms"]+=w.publish_ms;
+
         out.timing["dynamic_improvement_sum_ms"]+=w.improvement_ms;
         out.timing["dynamic_cache_sum_ms"]+=w.key_ms;
     }
     out.counters["dynamic_shared_cache_entries"]=out.counters["pattern_cache_entries"];
+
     out.counters["dynamic_shared_cache_bytes"]=scores.bytes();
     out.counters["dynamic_score_cache_bytes"]=scores.bytes();
     out.counters["pattern_zero_edges"]+=out.counters["pattern_global_core_skipped"];
@@ -358,6 +407,7 @@ PatternReuseBuildResult build_pattern_dynamic(const Graph& g,const LayerPattern&
         out.values.capacity()*sizeof(Score)+ids.capacity()*sizeof(std::size_t)+lower.capacity()*sizeof(std::atomic<Score>);
     out.timing["dynamic_total_ms"]=ms(started);
     out.timing["dynamic_cpu_ms"]=1000.0*(std::clock()-cpu_started)/CLOCKS_PER_SEC;
+
     return out;
 }
 } // namespace mcviz

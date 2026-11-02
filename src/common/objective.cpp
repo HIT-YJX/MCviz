@@ -29,11 +29,11 @@ Score checked_add(Score a, Score b) {
     return a + b;
 }
 
-
 Score checked_mul(Score a, Score b) {
     require(a == 0 || b <= std::numeric_limits<Score>::max() / a, "Score multiplication overflow");
     return a * b;
 }
+
 
 
 Score score(const LayerPattern& p, Objective obj, const std::vector<Score>& sizes) {

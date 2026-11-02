@@ -14,25 +14,37 @@ namespace {
 using Clock = std::chrono::steady_clock;
 using NeighborList = std::vector<VertexPos>;
 
+// Add accounting values with saturation at the largest representable count.
 std::uint64_t add_count(std::uint64_t a, std::uint64_t b) {
     return b > std::numeric_limits<std::uint64_t>::max() - a
         ? std::numeric_limits<std::uint64_t>::max() : a + b;
 }
+
+
+
 std::uint64_t multiply_count(std::uint64_t a, std::uint64_t b) {
     return a && b > std::numeric_limits<std::uint64_t>::max() / a
         ? std::numeric_limits<std::uint64_t>::max() : a * b;
 }
+
 Score add_score(Score a, Score b) {
     if (b > std::numeric_limits<Score>::max() - a) throw std::runtime_error("Score addition overflow");
     return a + b;
 }
+
+
 Score multiply_score(Score a, Score b) {
     if (a && b > std::numeric_limits<Score>::max() / a) throw std::runtime_error("Score multiplication overflow");
     return a * b;
 }
+
+
+
 double milliseconds(Clock::time_point start) {
     return std::chrono::duration<double, std::milli>(Clock::now() - start).count();
 }
+
+
 Layer center_of(const LayerPattern& pattern) {
     auto centers = pattern.star_centers();
 
@@ -66,6 +78,7 @@ struct Topology {
             for (VertexPos v = 0; v < graph.vertex_ids[j].size(); ++v) {
                 auto& row = rows[next++];
                 row.layer = j;
+
                 row.vertex = v;
                 row.primary = &graph.neighbors(j, v, center);
             }
@@ -73,6 +86,7 @@ struct Topology {
 
         for (std::size_t id = 0; id < graph.edges.size(); ++id) {
             auto edge = graph.edges[id];
+
             if (edge.u.layer != center) std::swap(edge.u, edge.v);
 
             const auto flat = offsets[edge.v.layer] + edge.v.pos;
@@ -85,7 +99,9 @@ struct Topology {
         for (std::size_t u = 0; u < primary_neighbors.size(); ++u) {
             auto& neighbors = primary_neighbors[u];
             std::sort(neighbors.begin(), neighbors.end());
+
             std::size_t at = 0;
+
             for (Layer j = 0; j < layers; ++j) {
                 starts[u * (std::size_t(layers) + 1) + j] = at;
                 while (at < neighbors.size() && rows[neighbors[at]].layer == j) ++at;
@@ -95,6 +111,7 @@ struct Topology {
         for (auto& row : rows) {
             for (auto u : *row.primary) row.cost = add_count(row.cost, primary_neighbors[u].size());
         }
+
         order.resize(rows.size());
         std::iota(order.begin(), order.end(), 0);
         std::sort(order.begin(), order.end(), [&](auto a, auto b) {
@@ -106,6 +123,7 @@ struct Topology {
         auto result = multiply_count(offsets.capacity() + order.capacity() + starts.capacity(), sizeof(std::size_t));
         result = add_count(result, multiply_count(rows.capacity(), sizeof(Row)));
         result = add_count(result, multiply_count(primary_neighbors.capacity(), sizeof(std::vector<std::size_t>)));
+
         for (const auto& row : rows) result = add_count(result, multiply_count(row.incident.capacity(), sizeof(Incident)));
         for (const auto& neighbors : primary_neighbors) result = add_count(result, multiply_count(neighbors.capacity(), sizeof(std::size_t)));
         return result;
@@ -129,12 +147,15 @@ struct Worker {
           minima(new Score[maximum_degree + 1]), capacity(new Score[layers]),
           feasible(new unsigned char[maximum_degree + 1]),
           payload_bytes(estimate(secondary, maximum_degree, layers)) {}
+
     static std::uint64_t estimate(std::size_t secondary, std::size_t degree, unsigned layers) {
         auto bytes = multiply_count(degree + 1, 3 * sizeof(Score) + sizeof(unsigned char));
         bytes = add_count(bytes, multiply_count(layers, sizeof(Score)));
         bytes = add_count(bytes, multiply_count(secondary, sizeof(VertexPos) + sizeof(std::size_t)));
         return bytes;
     }
+
+
     std::uint64_t bytes() const { return payload_bytes; }
 };
 
@@ -143,13 +164,16 @@ struct Worker {
 void prepare_row(const Topology& topology, const Row& row, Worker& worker) {
     for (std::size_t i = 0; i < worker.touched_size; ++i) worker.common[worker.touched[i]] = 0;
     worker.touched_size = 0;
+
     for (auto u : *row.primary) for (auto x : topology.primary_neighbors[u]) {
         if (!worker.common[x]) worker.touched[worker.touched_size++] = x;
         ++worker.common[x];
     }
+
     ++worker.rows;
     worker.wedges = add_count(worker.wedges, row.cost);
 }
+
 
 Score evaluate(const Topology& topology, const Row& row, VertexPos u, const LayerPattern& pattern,
                Objective objective, const Thresholds& beta, Worker& worker) {
@@ -161,6 +185,7 @@ Score evaluate(const Topology& topology, const Row& row, VertexPos u, const Laye
         worker.capacity[j] = topology.starts[base + j + 1] - topology.starts[base + j];
     for (Layer j = 0; j < topology.layers; ++j) if (worker.capacity[j] < beta[j]) return 0;
     Score coarse = 0;
+
     if (objective == Objective::edge) {
         for (auto edge : pattern.edges)
             coarse = add_score(coarse, multiply_score(worker.capacity[edge.first], worker.capacity[edge.second]));
@@ -181,6 +206,7 @@ Score evaluate(const Topology& topology, const Row& row, VertexPos u, const Laye
         for (std::size_t a = maximum; a > 0; --a) {
             count += worker.histogram[a - 1];
             worker.sums[a] = add_score(worker.sums[a], count);
+
             worker.minima[a] = std::min(worker.minima[a], count);
             if (count < beta[j]) worker.feasible[a] = 0;
         }
@@ -190,6 +216,7 @@ Score evaluate(const Topology& topology, const Row& row, VertexPos u, const Laye
         if (worker.feasible[a]) {
             const auto value = objective == Objective::edge ? multiply_score(a, worker.sums[a]) :
                 objective == Objective::vertex ? add_score(a, worker.sums[a]) : std::min<Score>(a, worker.minima[a]);
+
             bound = std::max(bound, value);
         }
     return std::min(coarse, bound);
@@ -204,7 +231,9 @@ SupportBuildResult build_star_support(const Graph& active, const LayerPattern& p
                                      Objective objective, const Thresholds& beta,
                                      unsigned threads, std::uint64_t cache_bytes) {
     SupportBuildResult result;
+
     result.values.resize(active.edges.size());
+
     for (auto key : {"support_requested_threads", "support_actual_threads", "support_workers_allocated",
                      "support_rows_prepared", "support_edges_evaluated", "support_cache_peak_bytes",
                      "support_cache_budget_bytes", "support_scratch_bytes_per_worker", "support_shared_bytes",
@@ -214,6 +243,7 @@ SupportBuildResult build_star_support(const Graph& active, const LayerPattern& p
     for (auto key : {"support_prepare_ms", "support_rows_ms", "support_weights_ms"}) result.timing[key] = 0;
     result.counters["support_requested_threads"] = threads;
     result.counters["support_cache_budget_bytes"] = cache_bytes;
+
     auto start = Clock::now();
     PreparedStarBounds scalar(active, pattern, objective, beta);
     const auto center = center_of(pattern);
@@ -221,25 +251,32 @@ SupportBuildResult build_star_support(const Graph& active, const LayerPattern& p
     for (Layer j = 0; j < active.K; ++j) if (j != center) {
         require(active.vertex_ids[j].size() <= std::numeric_limits<std::size_t>::max() - secondary_count,
                 "Support secondary size overflow");
+
         secondary_count += active.vertex_ids[j].size();
         for (VertexPos v = 0; v < active.vertex_ids[j].size(); ++v)
             maximum_degree = std::max(maximum_degree, active.neighbors(j, v, center).size());
     }
     require(maximum_degree < std::numeric_limits<std::size_t>::max(), "Support histogram size overflow");
+
     const auto estimate = Worker::estimate(secondary_count, maximum_degree, active.K);
+
     result.counters["support_scratch_bytes_per_worker"] = estimate;
+
     auto scalar_fallback = [&]() {
         result.strategy = "star-support-scalar";
         result.counters["support_actual_threads"] = 1;
         result.counters["support_fallback_rows"] = secondary_count;
         result.counters["support_scalar_edges"] = active.edges.size();
+
         result.counters["support_edges_evaluated"] = active.edges.size();
         result.timing["support_prepare_ms"] = milliseconds(start);
+
         const auto weights_start = Clock::now();
         for (std::size_t id = 0; id < active.edges.size(); ++id)
             result.values[id] = scalar.bound(active.edges[id], true);
         result.timing["support_weights_ms"] = milliseconds(weights_start);
         result.timing["support_parallel_wall_ms"] = result.timing["support_weights_ms"];
+
         result.timing["worker_0_total_ms"] = result.timing["support_weights_ms"];
         result.timing["worker_0_prepare_ms"] = 0;
         result.timing["worker_0_solver_ms"] = result.timing["support_weights_ms"];
@@ -248,21 +285,27 @@ SupportBuildResult build_star_support(const Graph& active, const LayerPattern& p
     };
     if (estimate > cache_bytes || !secondary_count) {
         scalar_fallback();
+
         return result;
     }
+
     std::unique_ptr<Topology> topology;
     std::vector<std::unique_ptr<Worker>> workers;
+
     auto count = static_cast<std::size_t>(std::min<std::uint64_t>({threads, secondary_count, cache_bytes / estimate}));
     std::uint64_t allocated = 0, reserved_peak = 0;
     {
         topology = std::make_unique<Topology>(active, center, secondary_count);
+
         workers.reserve(count);
         for (std::size_t i = 0; i < count; ++i) {
             reserved_peak = std::max(reserved_peak, add_count(allocated, estimate));
             auto worker = std::make_unique<Worker>(secondary_count, maximum_degree, active.K);
             const auto bytes = worker->bytes();
             if (bytes > cache_bytes - allocated) break;
+
             allocated += bytes;
+
             result.counters["support_scratch_bytes_per_worker"] = std::max(estimate, bytes);
             workers.push_back(std::move(worker));
         }
@@ -271,9 +314,11 @@ SupportBuildResult build_star_support(const Graph& active, const LayerPattern& p
     if (workers.empty()) {
         topology.reset();
         scalar_fallback();
+
         return result;
     }
     result.strategy = "star-support-row-cache";
+
     result.counters["support_workers_allocated"] = workers.size();
     result.counters["support_shared_bytes"] = topology->bytes();
     result.timing["support_prepare_ms"] = milliseconds(start);
@@ -289,19 +334,26 @@ SupportBuildResult build_star_support(const Graph& active, const LayerPattern& p
             const auto row_start = Clock::now();
             prepare_row(*topology, row, worker);
             worker.rows_ms += milliseconds(row_start);
+
             worker.lookups = add_count(worker.lookups, row.cost);
             const auto weights_start = Clock::now();
+
             for (const auto edge : row.incident) {
                 result.values[edge.edge] = evaluate(*topology, row, edge.primary, pattern, objective, beta, worker);
                 ++worker.edges;
             }
+
             worker.weights_ms += milliseconds(weights_start);
         }
+
         worker.total_ms = milliseconds(worker_start);
     };
+
     std::vector<std::thread> pool;
     std::uint64_t thread_fallbacks = 0;
+
     const auto parallel_start = Clock::now();
+
     { pool.reserve(workers.size() - 1); }
     for (std::size_t i = 0; i + 1 < workers.size(); ++i) {
         { pool.emplace_back(run, i); }
@@ -311,6 +363,7 @@ SupportBuildResult build_star_support(const Graph& active, const LayerPattern& p
     result.timing["support_parallel_wall_ms"] = milliseconds(parallel_start);
     result.counters["support_actual_threads"] = pool.size() + 1;
     result.counters["support_thread_fallbacks"] = thread_fallbacks;
+
     for (const auto& worker : workers) {
         result.counters["support_rows_prepared"] = add_count(result.counters["support_rows_prepared"], worker->rows);
         result.counters["support_edges_evaluated"] = add_count(result.counters["support_edges_evaluated"], worker->edges);
@@ -318,8 +371,10 @@ SupportBuildResult build_star_support(const Graph& active, const LayerPattern& p
         result.counters["support_merge_pairs"] = add_count(result.counters["support_merge_pairs"], worker->merges);
         result.counters["support_pair_lookups"] = add_count(result.counters["support_pair_lookups"], worker->lookups);
         result.timing["support_rows_ms"] += worker->rows_ms;
+
         result.timing["support_weights_ms"] += worker->weights_ms;
     }
+
     for (std::size_t i = 0; i <= pool.size(); ++i) {
         const auto key = "worker_" + std::to_string(i);
         const auto& worker = *workers[i];

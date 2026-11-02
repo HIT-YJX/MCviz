@@ -21,9 +21,11 @@ PartnerRows::PartnerRows(const Graph& g, const LayerPattern& p, const Sets& base
     if (estimate > memory) return;
     {
         base_ = base;
+
         pos_.resize(g.K); blocks_.resize(g.K);
         for (Layer i = 0; i < g.K; ++i) {
             pos_[i].assign(g.vertex_ids[i].size(), missing);
+
             for (std::size_t a = 0; a < base[i].size(); ++a) pos_[i][base[i][a]] = a;
         }
         for (Layer i = 0; i < g.K; ++i) for (auto j : p.neighbors[i]) {
@@ -33,6 +35,7 @@ PartnerRows::PartnerRows(const Graph& g, const LayerPattern& p, const Sets& base
                 const auto c = pos_[j][v];
                 if (c != missing) b.bits[a*b.words+c/64] |= Word(1)<<(c%64);
             }
+
             blocks_[i].push_back(std::move(b));
         }
         bytes_ = static_cast<std::uint64_t>(estimate); ready_ = true;
@@ -56,6 +59,7 @@ CoreResult PartnerRows::reduce(const Thresholds& beta, Sets domains, const Requi
     while (true) {
         ++stats.rounds;
         std::vector<std::vector<Word>> masks(g_.K);
+
         for (Layer i = 0; i < g_.K; ++i) {
             masks[i].assign((base_[i].size()+63)/64, 0);
             for (auto u : result.domains[i]) {
@@ -63,7 +67,9 @@ CoreResult PartnerRows::reduce(const Thresholds& beta, Sets domains, const Requi
                 masks[i][a/64] |= Word(1)<<(a%64);
             }
         }
+
         Sets next = result.domains;
+
         bool stopped = false, changed = false;
         for (Layer i = 0; i < g_.K && !stopped; ++i) {
             if (beta[i] <= 1) continue;
@@ -72,22 +78,29 @@ CoreResult PartnerRows::reduce(const Thresholds& beta, Sets domains, const Requi
             std::sort(order.begin(),order.end(),[&](auto a,auto b) {
                 return result.domains[blocks_[i][a].target].size() < result.domains[blocks_[i][b].target].size();
             });
+
             next[i].clear();
             for (std::size_t uidx=0; uidx<result.domains[i].size(); ++uidx) {
                 auto u = result.domains[i][uidx];
                 std::uint64_t partners = 0;
+
                 for (auto v : result.domains[i]) {
                     if (u==v) continue;
                     if (stats.work >= budget) { stopped=true; break; }
+
                     ++stats.work;
                     bool compatible = true;
+
                     for (auto bidx : order) {
                         const auto& b = blocks_[i][bidx];
                         const auto au=pos_[i][u]*b.words, av=pos_[i][v]*b.words;
                         std::uint64_t common=0;
+
                         for (std::size_t z=0; z<b.words && common<beta[b.target]; ++z) {
                             if (stats.work >= budget) { stopped=true; break; }
+
                             ++stats.work;
+
                             common += __builtin_popcountll(b.bits[au+z]&b.bits[av+z]&masks[b.target][z]);
                         }
                         if (stopped || common<beta[b.target]) { compatible=false; break; }
@@ -97,14 +110,19 @@ CoreResult PartnerRows::reduce(const Thresholds& beta, Sets domains, const Requi
                 }
                 if (stopped) {
                     next[i].insert(next[i].end(),result.domains[i].begin()+uidx,result.domains[i].end());
+
                     break;
                 }
+
                 if (partners >= beta[i]-1) next[i].push_back(u);
                 else { ++stats.removed; ++result.removed; changed=true; }
             }
         }
+
         if (stopped) ++stats.budget_stops;
+
         result.domains = std::move(next);
+
         if (changed) {
             auto core = mcviz::reduce(g_,p_,beta,std::move(result.domains),fixed,CoreBackend::queue,&workspace);
             stats.core_removed += core.removed;
@@ -114,6 +132,7 @@ CoreResult PartnerRows::reduce(const Thresholds& beta, Sets domains, const Requi
         }
         if (!result.possible || !changed || stopped) break;
     }
+
     result.possible = result.possible && enough_capacity(result.domains,beta) && contains_required(result.domains,fixed);
     return result;
 }

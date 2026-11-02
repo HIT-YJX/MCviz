@@ -30,6 +30,7 @@ void search_star_region(const Graph& g, const LayerPattern& P, Objective obj,
     auto& stats = progress.stats;
     ++stats.star_regions;
     stats.star_max_center_vertices = std::max<std::uint64_t>(stats.star_max_center_vertices, primary.size());
+
     stats.star_max_secondary_vertices = std::max<std::uint64_t>(
         stats.star_max_secondary_vertices, order.size() - primary.size());
     struct Frame { size_t at; unsigned char phase; };
@@ -55,11 +56,13 @@ void search_star_region(const Graph& g, const LayerPattern& P, Objective obj,
                 }
             }
             chosen.push_back(u);
+
             common_stack.push_back(std::move(next));
             stack.push_back({frame.at + 1, 0});
             continue;
         }
         progress.state(true);
+
         const auto& current = common_stack.back();
         bool possible = chosen.size() + primary.size() - frame.at >= tau[center];
         for (Layer p = 0; p < g.K; ++p) if (p != center && current[p].size() < tau[p]) possible = false;
@@ -76,17 +79,22 @@ void search_star_region(const Graph& g, const LayerPattern& P, Objective obj,
             std::vector<Score> sizes(g.K);
             for (Layer p = 0; p < g.K; ++p) sizes[p] = p == center ? chosen.size() : current[p].size();
             ++stats.star_saturated_leaves;
+
             Score value = score(P, obj, sizes);
             if (!best.found || value > best.score) {
                 best.found = true;
+
                 best.score = value;
                 best.sets = current;
                 best.sets[center] = chosen;
             }
+
             stack.pop_back();
             continue;
         }
+
         ++stats.star_branch_states;
+
         frame.phase = 1;
         bool must_include = false;
         for (auto q : required) if (q.layer == center && q.pos == primary[frame.at]) must_include = true;
@@ -107,7 +115,9 @@ void search_region(const Graph& g, const LayerPattern& P, Objective obj,
     std::vector<Frame> stack{{0,0}};
     Sets chosen(g.K);
     std::vector<Score> sizes(g.K);
+
     std::vector<std::vector<Score>> suffix(order.size() + 1, std::vector<Score>(g.K));
+
     for (size_t at = order.size(); at > 0; at--) {
         suffix[at - 1] = suffix[at];
         suffix[at - 1][vertices[order[at - 1]].layer]++;
@@ -122,12 +132,14 @@ void search_region(const Graph& g, const LayerPattern& P, Objective obj,
             stack.pop_back();
             continue;
         }
+
         if (frame.phase == 1) {
             frame.phase = 2;
             const LocalVertex v = vertices[order[frame.at]];
             bool compatible = true;
             for (Layer p = 0; p < g.K && compatible; p++) {
                 if (!P.adjacent(p, v.layer)) continue;
+
                 for (auto u : chosen[p]) if (!g.has_edge(p, u, v.layer, v.pos)) {
                     compatible = false;
                     break;
@@ -140,6 +152,7 @@ void search_region(const Graph& g, const LayerPattern& P, Objective obj,
             } else {
                 frame.phase = 3;
             }
+
             continue;
         }
         if (frame.phase == 3) {
@@ -154,12 +167,16 @@ void search_region(const Graph& g, const LayerPattern& P, Objective obj,
             cap[p] = sizes[p] + suffix[frame.at][p];
             if (cap[p] < tau[p]) possible = false;
         }
+
         if (!possible || (best.found && score(P, obj, cap) <= best.score)) {
             stack.pop_back();
+
             continue;
         }
+
         if (frame.at == order.size()) {
             bool feasible = true;
+
             for (Layer p = 0; p < g.K; p++) if (sizes[p] < tau[p]) feasible = false;
             for (auto q : required) {
                 const auto& C = chosen[q.layer];
@@ -177,6 +194,7 @@ void search_region(const Graph& g, const LayerPattern& P, Objective obj,
             continue;
         }
         ++progress.stats.generic_branch_states;
+
         frame.phase = 1;
         stack.push_back({frame.at + 1, 0});
     }
@@ -199,6 +217,7 @@ SearchResult query_bcvizm(const Graph& g, const BcvizmIndex& index,
     out.sets.resize(g.K);
     for (Layer p = 0; p < g.K; p++) if (q.gamma[p] > g.vertex_ids[p].size()) {
         out.status = Status::infeasible;
+
         return out;
     }
 
@@ -208,6 +227,7 @@ SearchResult query_bcvizm(const Graph& g, const BcvizmIndex& index,
     }
     if (P.edges.empty()) {
         out.found = true;
+
         out.sets = g.all_vertices();
         std::vector<Score> sizes(g.K);
         for (Layer p = 0; p < g.K; p++) sizes[p] = out.sets[p].size();
@@ -217,6 +237,7 @@ SearchResult query_bcvizm(const Graph& g, const BcvizmIndex& index,
     }
 
     std::vector<std::vector<unsigned>> regions;
+
     if (!P.connected()) {
         regions.emplace_back();
         for (auto e : index.order) regions.back().push_back(e.vertex);
@@ -226,6 +247,7 @@ SearchResult query_bcvizm(const Graph& g, const BcvizmIndex& index,
                 regions.emplace_back();
                 if (stats) stats->zero_cuts++;
             }
+
             regions.back().push_back(e.vertex);
         }
     }
@@ -241,6 +263,7 @@ SearchResult query_bcvizm(const Graph& g, const BcvizmIndex& index,
         }
         bool possible = contains_required;
         for (Layer p = 0; p < g.K; p++) if (cap[p] < q.gamma[p]) possible = false;
+
         if (out.found && score(P, spec.objective, cap) <= out.score) possible = false;
         if (!possible) {
             if (stats) stats->capacity_skipped++;
@@ -254,13 +277,16 @@ SearchResult query_bcvizm(const Graph& g, const BcvizmIndex& index,
         }
     }
     out.status = out.found ? Status::optimal : Status::infeasible;
+
     return out;
 }
+
 
 SearchResult run_bcvizm(const Graph& g, const LayerPattern& P, Objective obj,
                         const QueryRequest& request, BcvizmStats* stats) {
     BuildSpec spec{P, obj, request.gamma};
     auto index = construct_bcvizm(g, spec);
+
     return query_bcvizm(g, index, request, stats);
 }
 }

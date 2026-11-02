@@ -13,6 +13,7 @@ class Sha256 {
     size_t used = 0;
     uint64_t bytes = 0;
     static uint32_t rotr(uint32_t x, unsigned n) { return (x >> n) | (x << (32 - n)); }
+
     void compress() {
         static constexpr uint32_t k[64] = {
             0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
@@ -28,12 +29,15 @@ class Sha256 {
         for (unsigned i=16; i<64; ++i) {
             uint32_t s0=rotr(w[i-15],7)^rotr(w[i-15],18)^(w[i-15]>>3);
             uint32_t s1=rotr(w[i-2],17)^rotr(w[i-2],19)^(w[i-2]>>10);
+
             w[i]=w[i-16]+s0+w[i-7]+s1;
         }
         uint32_t a=h[0],b=h[1],c=h[2],d=h[3],e=h[4],f=h[5],g=h[6],v=h[7];
+
         for (unsigned i=0; i<64; ++i) {
             uint32_t s1=rotr(e,6)^rotr(e,11)^rotr(e,25), ch=(e&f)^(~e&g);
             uint32_t t1=v+s1+ch+k[i]+w[i], s0=rotr(a,2)^rotr(a,13)^rotr(a,22);
+
             uint32_t t2=s0+((a&b)^(a&c)^(b&c));
             v=g;g=f;f=e;e=d+t1;d=c;c=b;b=a;a=t1+t2;
         }
@@ -47,6 +51,8 @@ public:
             if (used==64) { compress(); used=0; }
         }
     }
+
+
     std::string finish() {
         uint64_t bits=bytes*8;
         block[used++]=0x80;
@@ -56,6 +62,7 @@ public:
         compress();
         std::ostringstream out;
         out << std::hex << std::setfill('0');
+
         for (uint32_t x:h) out << std::setw(8) << x;
         return out.str();
     }

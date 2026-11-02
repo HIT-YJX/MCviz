@@ -54,6 +54,9 @@ public:
     CoreResult get(const GraphEdge& edge);
     bool cache_ready() const;
     const PatternEdgeDomainCounters& counters() const { return counters_; }
+
+
+    // Expose the accumulated preparation timings for edge-conditioned candidate domains.
     const PatternEdgeDomainTiming& timing() const { return timing_; }
 
 private:

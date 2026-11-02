@@ -1,5 +1,6 @@
 #include "star_build.h"
 namespace mcviz {
+// Build the surviving star subgraph while retaining original edge identities.
 StarBuildView prepare_star_build(const Graph& g, const LayerPattern& p, const Sets& core) {
     std::vector<std::vector<unsigned char>> member(g.K);
     std::vector<VertexRef> vertices;

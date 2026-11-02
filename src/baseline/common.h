@@ -35,6 +35,7 @@ struct StarClique {
     bool found;
 
     StarClique() : size(0), found(false) {}
+
     StarClique(uint K) : sets(K), size(0), found(false) {}
 };
 

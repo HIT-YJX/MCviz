@@ -4,6 +4,7 @@
 #include <iterator>
 
 namespace mcviz {
+// Choose the requested anchor when it is a valid star center.
 static Layer center_of(const LayerPattern& p) {
     auto centers = p.star_centers();
 
@@ -12,8 +13,13 @@ static Layer center_of(const LayerPattern& p) {
 
 namespace {
 struct ReferenceArithmetic {
+    // Add two scores through the shared overflow-aware arithmetic helper.
     Score add(Score a, Score b) const { return checked_add(a, b); }
+
+
     Score multiply(Score a, Score b) const { return checked_mul(a, b); }
+
+
     Score capacity(const LayerPattern& p, Objective obj, const std::vector<Score>& cap) const {
         return score(p, obj, cap);
     }
@@ -24,10 +30,16 @@ struct PreparedArithmetic {
         if (b > std::numeric_limits<Score>::max() - a) throw std::runtime_error("Score addition overflow");
         return a + b;
     }
+
+
+
     Score multiply(Score a, Score b) const {
         if (a != 0 && b > std::numeric_limits<Score>::max() / a) throw std::runtime_error("Score multiplication overflow");
         return a * b;
     }
+
+
+    // Evaluate the objective bound induced by the supplied layer capacities.
     Score capacity(const LayerPattern& p, Objective obj, const std::vector<Score>& cap) const {
         Score value = 0;
         if (obj == Objective::edge) {
@@ -50,6 +62,7 @@ Score evaluate_star_bound(unsigned layers, const LayerPattern& p, Objective obj,
     for (Layer j = 0; j < layers; ++j) if (cap[j] < beta[j]) return 0;
     Score coarse = arithmetic.capacity(p, obj, cap);
     if (!support) return coarse;
+
     std::vector<Score> sums(A.size() + 1, 0), minima(A.size() + 1, std::numeric_limits<Score>::max());
     std::vector<bool> feasible(A.size() + 1, true);
     for (Layer j = 0; j < layers; ++j) if (j != center) {
@@ -68,6 +81,7 @@ Score evaluate_star_bound(unsigned layers, const LayerPattern& p, Objective obj,
         for (std::size_t a = A.size(); a > 0; --a) {
             count += hist[a - 1]; sums[a] = arithmetic.add(sums[a], count);
             minima[a] = std::min(minima[a], count);
+
             if (count < beta[j]) feasible[a] = false;
         }
     }
@@ -89,11 +103,14 @@ Score star_edge_bound(const Graph& g, const LayerPattern& p, Objective obj,
     auto adjacency = [&](Layer i, VertexPos u, Layer j) {
         std::vector<VertexPos> a;
         const auto& ns = g.neighbors(i, u, j);
+
         std::set_intersection(ns.begin(), ns.end(), core[j].begin(), core[j].end(), std::back_inserter(a));
         return a;
     };
     return evaluate_star_bound(g.K, p, obj, beta, e, support, center, adjacency, ReferenceArithmetic{});
 }
+
+
 
 PreparedStarBounds::PreparedStarBounds(const Graph& active, const LayerPattern& pattern,
                                      Objective objective, const Thresholds& beta)
@@ -117,6 +134,7 @@ PreparedStarBounds::PreparedStarBounds(const Graph& active, const LayerPattern& 
         }
     }
 }
+
 
 const PreparedStarBounds::Neighborhood& PreparedStarBounds::adjacency(Layer layer, VertexPos vertex,
                                                                      Layer target) const {

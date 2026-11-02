@@ -13,6 +13,7 @@
 namespace mcviz {
 namespace {
 namespace fs = std::filesystem;
+// Map dataset filenames to their index naming aliases.
 std::string alias(const std::string& stem) {
     static const std::map<std::string, std::string> names{
         {"imdb_hgb_k4","imdb"},{"dblp_hgb_k4","dblp"},{"DBLP_k2","dblp2"},
@@ -24,14 +25,28 @@ std::string alias(const std::string& stem) {
     auto name = i == names.end() ? stem : i->second;
     return name;
 }
+
+
+
 std::string token(std::istream& in) { std::string s; in >> s; return s; }
+
 std::string quoted(std::istream& in) { std::string s; in >> std::quoted(s); return s; }
+
+
+// Read a bounded integer from index metadata.
 Score take(std::istream& in, Score limit) { return number(token(in), "index metadata", limit); }
+
+// Read a length-prefixed threshold vector.
 Thresholds vector(std::istream& in, std::size_t limit) {
     auto n = take(in, limit); Thresholds a;
+
     for (Score j = 0; j < n; ++j) a.push_back(take(in, std::numeric_limits<Score>::max()));
+
     return a;
 }
+
+
+// Read pattern edges and normalize their order.
 void edges(std::istream& in, LayerPattern& p) {
     auto n = take(in, Score(p.K) * (p.K - 1) / 2);
     for (Score j = 0; j < n; ++j) {
@@ -41,13 +56,18 @@ void edges(std::istream& in, LayerPattern& p) {
     }
     p.normalize();
 }
+
+
+// Recognize existing paths, including symbolic links.
 bool exists(const std::string& path) { return fs::exists(path) || fs::is_symlink(path); }
 }
 
 
+// Derive index paths from the dataset and query configuration.
 LibraryPaths library_paths(const CliOptions& opt, const Graph& g, const BuildSpec& spec,
                            const std::string& algorithm) {
     const auto& p = spec.pattern;
+
     auto shape = p.selector;
     std::string pattern_suffix;
     if (shape != "star" && shape != "complete" && shape != "path" && shape != "cycle" && shape != "empty")
@@ -56,7 +76,9 @@ LibraryPaths library_paths(const CliOptions& opt, const Graph& g, const BuildSpe
         auto normal = make_pattern(g.K, "path");
         if (normal.edges != p.edges) pattern_suffix = "-ph" + p.hash().substr(0, 12);
     }
+
     auto b = *std::max_element(spec.beta.begin(), spec.beta.end());
+
     bool standard = true, all = true, singleton = false;
     for (Layer j = 0; j < g.K; ++j) {
         singleton = singleton || g.vertex_ids[j].size() == 1;
@@ -64,13 +86,17 @@ LibraryPaths library_paths(const CliOptions& opt, const Graph& g, const BuildSpe
         standard = standard && spec.beta[j] == (g.vertex_ids[j].size() == 1 ? 1 : b);
     }
     bool simple = all || standard;
+
     std::string beta = "b" + std::to_string(b);
+
     if (!simple) {
         beta = "bvec";
         for (Layer j = 0; j < g.K; ++j) { if (j) beta += 'x'; beta += std::to_string(spec.beta[j]); }
     }
+
     auto prefix = alias(fs::path(opt.graph_file).stem().string()) + '_' + algorithm + '_';
     auto stem = prefix + shape + '_' + objective_name(spec.objective) + '_' + beta;
+
     if (shape == "star") stem += "_p" + std::to_string(p.anchor_layer);
     stem += pattern_suffix;
     auto base = (fs::path(opt.index_dir) / (stem + ".idx")).string();
@@ -89,8 +115,11 @@ LibraryPaths library_paths(const CliOptions& opt, const Graph& g, const BuildSpe
             stem, prefix};
 }
 
+
+
 BuildIdentity library_index_identity(const std::string& path) {
     std::ifstream in(path, std::ios::binary);
+
     auto magic = token(in);
     BuildIdentity id;
     auto& p = id.spec.pattern;
@@ -108,7 +137,9 @@ BuildIdentity library_index_identity(const std::string& path) {
         id.schema = static_cast<unsigned>(take(in, schema_version)); id.contract = token(in);
         p.K = static_cast<unsigned>(take(in, 4096));
         id.engine = token(in); id.value_kind = token(in); id.graph_hash = token(in); id.pattern_hash = token(in);
+
         id.spec.objective = parse_objective(token(in)); p.anchor_layer = static_cast<Layer>(take(in, p.K - 1));
+
         p.selector = quoted(in); p.source = quoted(in);
         vector(in, p.K); vector(in, p.K); id.spec.beta = vector(in, p.K); edges(in, p);
     } else throw std::runtime_error("Unsupported public index metadata format: " + path);
@@ -119,6 +150,7 @@ std::string find_library_index(const LibraryPaths& paths, const Graph& g, const 
                                const std::string& engine, const std::string& value_kind) {
     auto dir = fs::path(paths.index).parent_path();
     if (!fs::exists(dir)) return {};
+
     std::vector<std::string> candidates;
     if (exists(paths.index)) candidates.push_back(paths.index);
     for (const auto& e : fs::directory_iterator(dir)) {
@@ -134,6 +166,7 @@ std::string find_library_index(const LibraryPaths& paths, const Graph& g, const 
             (spec.pattern.selector != "star" || id.spec.pattern.anchor_layer == spec.pattern.anchor_layer) &&
             (value_kind.empty() || id.value_kind == value_kind)) return path;
     }
+
     return {};
 }
 

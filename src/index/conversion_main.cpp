@@ -23,11 +23,14 @@ int main(int argc, char** argv) {
     }
     auto idx = PatternIndex::load(g, path, engine);
     const auto spec = idx.identity.spec;
+
     const auto tree = prepare_representation(g, idx.forest);
     g = Graph{};
     idx.weights = {};
     idx.weights.shrink_to_fit();
+
     idx.core_domains = {};
+
     idx.forest = Forest{};
 
     auto start = Clock::now();

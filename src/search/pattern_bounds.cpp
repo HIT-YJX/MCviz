@@ -11,10 +11,14 @@ bool contains_required(const Sets& d, const Required& required) {
     return true;
 }
 
+
+
 bool enough_capacity(const Sets& d, const Thresholds& gamma) {
     for (Layer i = 0; i < d.size(); ++i) if (d[i].size() < gamma[i]) return false;
     return true;
 }
+
+
 
 DomainResult condition_domains(const Graph& g, const LayerPattern& p, Sets d,
                                const Required& required) {
@@ -32,9 +36,12 @@ DomainResult condition_domains(const Graph& g, const LayerPattern& p, Sets d,
     return {std::move(d), possible};
 }
 
+
 Score capacity_bound(const LayerPattern& p, Objective obj, const Sets& d) {
     std::vector<Score> sizes;
+
     for (const auto& a : d) sizes.push_back(a.size());
+
     return score(p, obj, sizes);
 }
 }

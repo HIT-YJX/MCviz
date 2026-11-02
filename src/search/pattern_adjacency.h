@@ -22,8 +22,13 @@ public:
     // A shared cache may only serve its original Graph/P and the same full base.
     // The supplied base is sorted by Graph position, as in condition_domains.
     bool matches(const Graph& graph, const LayerPattern& pattern, const Sets& base) const;
+    // Report whether the cached adjacency representation is available for queries.
     bool ready() const { return ready_; }
+
+
     std::uint64_t logical_bytes() const { return logical_bytes_; }
+
+
     double prepare_ms() const { return prepare_ms_; }
 
 private:

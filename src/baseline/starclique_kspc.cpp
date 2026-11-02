@@ -25,6 +25,7 @@ StarClique StarCliqueFinder::find_max_pattern_clique_kspc_online(
                     vertices.push_back({p, v});
                 }
             }
+
             vector<bool> selected(vertices.size(), false);
             bool more_sets = true;
             while (more_sets) {
@@ -35,6 +36,7 @@ StarClique StarCliqueFinder::find_max_pattern_clique_kspc_online(
                 }
 
                 bool feasible = true;
+
                 for (uint p : layers) {
                     if (sets[p].size() < max(1u, thresholds[p])) {
                         feasible = false;
@@ -45,6 +47,7 @@ StarClique StarCliqueFinder::find_max_pattern_clique_kspc_online(
                     for (size_t i = 0; i < vertices.size() && feasible; i++) {
                         if (!selected[i]) continue;
                         const KpcVertex& a = vertices[i];
+
                         for (size_t j = i + 1; j < vertices.size(); j++) {
                             if (!selected[j]) continue;
                             const KpcVertex& b = vertices[j];

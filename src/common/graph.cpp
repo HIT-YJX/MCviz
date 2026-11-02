@@ -15,13 +15,16 @@ Graph Graph::from_records(unsigned K, const std::vector<VertexRef>& vertices,
     Graph g;
     g.K = K;
     g.vertex_ids.resize(K);
+
     for (auto u : vertices) {
         g.vertex_ids[u.layer].push_back(u.id);
     }
+
     for (auto e : input) {
         g.vertex_ids[e.first.layer].push_back(e.first.id);
         g.vertex_ids[e.second.layer].push_back(e.second.id);
     }
+
     g.adj_.resize(K);
     for (Layer i = 0; i < K; ++i) {
         auto& ids = g.vertex_ids[i];
@@ -54,6 +57,7 @@ Graph Graph::load(unsigned K, const std::string& graph_file, const std::string& 
     const auto gb = read_bytes(graph_file);
     const auto vb = vertices_file.empty() ? std::string() : read_bytes(vertices_file);
     std::vector<VertexRef> vs;
+
     std::vector<std::pair<VertexRef, VertexRef>> es;
     for (const auto& row : data_lines(vb)) {
         auto t = fields(row);
@@ -61,6 +65,7 @@ Graph Graph::load(unsigned K, const std::string& graph_file, const std::string& 
     }
     for (const auto& row : data_lines(gb)) {
         auto t = fields(row);
+
         es.push_back({{static_cast<Layer>(number(t[0], "edge layer", K - 1)), number(t[1], "vertex id")},
                       {static_cast<Layer>(number(t[2], "edge layer", K - 1)), number(t[3], "vertex id")}});
     }
@@ -85,15 +90,19 @@ VertexPos Graph::get_pos(Layer i, VertexId id) const {
 }
 
 
+
 VertexId Graph::get_id(Layer i, VertexPos u) const { return vertex_ids.at(i).at(u); }
+
 
 
 const std::vector<VertexPos>& Graph::neighbors(Layer i, VertexPos u, Layer j) const {
     const auto& a = adj_.at(i).at(u);
+
     auto it = a.find(j);
     static const std::vector<VertexPos> empty;
     return it == a.end() ? empty : it->second;
 }
+
 
 
 bool Graph::has_edge(Layer i, VertexPos u, Layer j, VertexPos v) const {
@@ -113,14 +122,18 @@ Sets Graph::all_vertices() const {
 }
 
 
+
+// Serialize the graph in a stable canonical order.
 std::string Graph::canonical() const {
     std::ostringstream out;
     out << "layer-graph-v1\n" << K << '\n';
     for (Layer i = 0; i < K; ++i) for (auto id : vertex_ids[i]) out << "v " << i << ' ' << id << '\n';
     for (auto e : edges) out << "e " << e.u.layer << ' ' << get_id(e.u.layer, e.u.pos) << ' '
                             << e.v.layer << ' ' << get_id(e.v.layer, e.v.pos) << '\n';
+
     return out.str();
 }
+
 
 
 std::string Graph::hash() const { return sha256(canonical()); }

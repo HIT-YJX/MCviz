@@ -22,8 +22,11 @@ std::string lower(std::string s) {
     return s;
 }
 
+
+
 std::string dataset(const CliOptions& opt, const BuildSpec& spec) {
     auto name = lower(std::filesystem::path(opt.graph_file).stem().string());
+
     static const std::map<std::string, std::string> names = {
         {"wordnet_k25", "wordnet"}, {"wordnet_p3", "wordnet-p3"},
         {"lastfm_hetrec_k3", "lastfm"}, {"last.fm", "lastfm"},
@@ -39,6 +42,7 @@ std::string dataset(const CliOptions& opt, const BuildSpec& spec) {
     return name;
 }
 
+// Normalize algorithm names for timing records.
 std::string method_key(const std::string& method) {
     auto name = lower(method);
     static const std::map<std::string, std::string> names = {
@@ -51,6 +55,7 @@ std::string method_key(const std::string& method) {
     return it == names.end() ? name : it->second;
 }
 
+
 std::string text(const std::string& s) {
     return !s.empty() && s.front() == '\\' ? "\\" + s : s;
 }
@@ -62,6 +67,8 @@ template<class T> std::string number(T value) {
     return out.str();
 }
 
+
+// Format thresholds as a JSON array.
 std::string array(const Thresholds& a) {
     std::string s = "[";
     for (std::size_t i = 0; i < a.size(); ++i) {
@@ -71,6 +78,7 @@ std::string array(const Thresholds& a) {
     return s + ']';
 }
 
+
 std::string pattern(const LayerPattern& p) {
     std::string s = "[";
     for (std::size_t i = 0; i < p.edges.size(); ++i) {
@@ -79,6 +87,8 @@ std::string pattern(const LayerPattern& p) {
     }
     return s + ']';
 }
+
+
 
 void cell(std::ostream& out, const std::string& s) {
     if (s.find_first_of("\t\r\n\"") == std::string::npos) { out << s; return; }
@@ -91,6 +101,7 @@ void cell(std::ostream& out, const std::string& s) {
 }
 
 
+
 // Append one typed TSV row; O(row bytes) time and space, with one schema per file.
 void append(const CliOptions& opt, const char* name, const std::vector<Cell>& row) {
     std::filesystem::create_directories(opt.log_dir);
@@ -99,26 +110,31 @@ void append(const CliOptions& opt, const char* name, const std::vector<Cell>& ro
         out << "# MCviz-test2 TSV v1\n";
         for (std::size_t i = 0; i < row.size(); ++i) {
             if (i) out << '\t';
+
             out << row[i].name;
         }
         out << '\n';
         for (std::size_t i = 0; i < row.size(); ++i) {
             if (i) out << '\t';
+
             out << row[i].type;
         }
         out << '\n';
     }
     for (std::size_t i = 0; i < row.size(); ++i) {
         if (i) out << '\t';
+
         cell(out, row[i].value);
     }
     out << '\n';
 }
 }
 
+// Record index construction time, size, and reuse status.
 void log_build(const CliOptions& opt, const BuildSpec& spec, const std::string& method,
                double seconds, std::uintmax_t bytes, bool reused) {
     const auto key = method_key(method);
+
     const std::string elapsed = reused ? "\\N" : number(seconds);
     append(opt, "builds.txt", {
         {"dataset", "text", text(dataset(opt, spec))}, {"method", "text", text(key)},
@@ -135,6 +151,7 @@ std::cout << " seconds=" << number(seconds);
     }
 std::cout << '\n';
 }
+
 
 void log_search(const CliOptions& opt, const BuildSpec& spec, const QueryRequest& query,
                 const SearchResult& result, const std::string& method, double seconds) {
@@ -153,6 +170,7 @@ void log_search(const CliOptions& opt, const BuildSpec& spec, const QueryRequest
         {"required", "text", required}, {"pattern", "json", pattern(spec.pattern)},
         {"primary", "number", number(spec.pattern.anchor_layer)}
     });
+
 std::cout << key << " search status=" << status_name(result.status)
     << " found=" << (result.found ? "true" : "false");
     if (result.found) {
@@ -160,6 +178,8 @@ std::cout << " score=" << result.score;
     }
 std::cout << " seconds=" << number(seconds) << '\n';
 }
+
+
 
 void log_conversion(const CliOptions& opt, const BuildSpec& spec, const std::string& method,
                     double forward, double reverse, std::uint64_t tree_bytes,

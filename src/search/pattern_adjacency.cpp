@@ -17,6 +17,7 @@ constexpr auto missing = std::numeric_limits<std::size_t>::max();
 struct Size {
     std::uint64_t bytes = 0;
     bool overflow = false;
+    // Accumulate required bytes and mark estimates that exceed integer capacity.
     void add(std::uint64_t count, std::uint64_t width) {
         if (count && width > (UINT64_MAX - bytes) / count) {
             overflow = true;
@@ -24,6 +25,8 @@ struct Size {
         }
         bytes += count * width;
     }
+
+
     bool fits(std::uint64_t limit) const { return !overflow && bytes <= limit; }
 };
 
@@ -50,6 +53,7 @@ PatternAdjacency::PatternAdjacency(const Graph& graph, const LayerPattern& patte
         owns_sparse_base_ = true;
         break;
     }
+
     for (Layer i = 0; i < graph.K; ++i) {
         const auto& a = owns_sparse_base_ ? ordered_[i] : base[i];
         for (auto u : a) graph.get_id(i, u);
@@ -64,10 +68,12 @@ PatternAdjacency::PatternAdjacency(const Graph& graph, const LayerPattern& patte
         std::size_t count = 0;
         for (Layer i = 0; i < graph.K; ++i) {
             size.add(base[i].size(), sizeof(VertexPos));
+
             size.add(graph.vertex_ids[i].size(), sizeof(std::size_t));
             size.add(pattern.neighbors[i].size(), sizeof(std::size_t) + sizeof(Block));
             if (pattern.neighbors[i].size() > missing - count) return;
             count += pattern.neighbors[i].size();
+
             for (auto j : pattern.neighbors[i]) {
                 size.add(base[i].size(), words(base[j].size()) * sizeof(std::uint64_t));
             }
@@ -76,12 +82,15 @@ PatternAdjacency::PatternAdjacency(const Graph& graph, const LayerPattern& patte
 
         if (!owns_sparse_base_) ordered_ = base;
         position_.resize(graph.K);
+
         outgoing_.resize(graph.K);
         blocks_.reserve(count);
         for (Layer i = 0; i < graph.K; ++i) {
             auto& layer = ordered_[i];
+
             std::sort(layer.begin(), layer.end());
             position_[i].assign(graph.vertex_ids[i].size(), missing);
+
             for (std::size_t r = 0; r < layer.size(); ++r) {
                 graph.get_id(i, layer[r]);
                 position_[i][layer[r]] = r;
@@ -91,10 +100,13 @@ PatternAdjacency::PatternAdjacency(const Graph& graph, const LayerPattern& patte
                 Block block;
                 block.from = i;
                 block.to = j;
+
                 block.words = words(base[j].size());
                 if (block.words && layer.size() > missing / block.words) return;
                 block.bits.assign(layer.size() * block.words, 0);
+
                 outgoing_[i].push_back(blocks_.size());
+
                 blocks_.push_back(std::move(block));
             }
         }
@@ -104,15 +116,18 @@ PatternAdjacency::PatternAdjacency(const Graph& graph, const LayerPattern& patte
         Size actual;
         actual.add(1, sizeof(PatternAdjacency));
         actual.add(ordered_.capacity(), sizeof(std::vector<VertexPos>));
+
         actual.add(position_.capacity(), sizeof(std::vector<std::size_t>));
         actual.add(outgoing_.capacity(), sizeof(std::vector<std::size_t>));
         actual.add(blocks_.capacity(), sizeof(Block));
+
         for (Layer i = 0; i < graph.K; ++i) {
             actual.add(ordered_[i].capacity(), sizeof(VertexPos));
             actual.add(position_[i].capacity(), sizeof(std::size_t));
             actual.add(outgoing_[i].capacity(), sizeof(std::size_t));
         }
         for (const auto& block : blocks_) actual.add(block.bits.capacity(), sizeof(std::uint64_t));
+
         if (!actual.fits(cache_bytes)) return;
 
         // Original adjacency determines the bits; missing non-P edges are never
@@ -127,7 +142,9 @@ PatternAdjacency::PatternAdjacency(const Graph& graph, const LayerPattern& patte
                     if (at != missing) block.bits[r * block.words + at / 64] |= 1ULL << (at % 64);
                 }
         }
+
         logical_bytes_ = actual.bytes;
+
         ready_ = true;
     
     };
@@ -136,6 +153,7 @@ PatternAdjacency::PatternAdjacency(const Graph& graph, const LayerPattern& patte
         if (!owns_sparse_base_) Sets().swap(ordered_);
         std::vector<std::vector<std::size_t>>().swap(position_);
         std::vector<std::vector<std::size_t>>().swap(outgoing_);
+
         std::vector<Block>().swap(blocks_);
         logical_bytes_ = 0;
         // A noncanonical input's normalization copy is compulsory sparse
@@ -156,8 +174,11 @@ bool PatternAdjacency::matches(const Graph& graph, const LayerPattern& pattern,
                                const Sets& base) const {
     if (&graph != &graph_ || &pattern != &pattern_) return false;
     if (ready_) return ordered_ == base;
+
     return (owns_sparse_base_ ? ordered_ : base_) == base;
 }
+
+
 
 // Intersect the shortest of base[j] and all mandatory neighbor lists. Sorted
 // lists provide exact membership without a graph-sized per-edge scan or map.
@@ -168,6 +189,7 @@ DomainResult PatternAdjacency::condition_sparse(const Required& required) const 
     for (auto q : required) graph_.get_id(q.layer, q.pos);
     DomainResult out{Sets(graph_.K), true};
     const auto& base = owns_sparse_base_ ? ordered_ : base_;
+
     for (Layer j = 0; j < graph_.K; ++j) {
         std::vector<const std::vector<VertexPos>*> rows{&base[j]};
         for (auto q : required) if (pattern_.adjacent(q.layer, j))
@@ -177,6 +199,7 @@ DomainResult PatternAdjacency::condition_sparse(const Required& required) const 
             [](auto a, auto b) { return a->size() < b->size(); });
         std::swap(rows.front(), *seed);
         auto& d = out.domains[j];
+
         d.reserve(rows.front()->size());
         for (auto u : *rows.front()) {
             bool keep = true;
@@ -189,6 +212,7 @@ DomainResult PatternAdjacency::condition_sparse(const Required& required) const 
     return out;
 }
 
+
 // Each mandatory point contributes one AND in each of its P-neighbor layers.
 // A shared target of multiple mandatory layers is intersected multiple times,
 // so triangles/cycles obey the same conjunction as general condition_domains.
@@ -197,6 +221,7 @@ DomainResult PatternAdjacency::condition_sparse(const Required& required) const 
 // intersection also handles graph-valid mandatory points outside the base.
 DomainResult PatternAdjacency::condition(const Required& required) const {
     if (!ready_) return condition_sparse(required);
+
     bool inside = true;
     for (auto q : required) {
         graph_.get_id(q.layer, q.pos);
@@ -206,6 +231,7 @@ DomainResult PatternAdjacency::condition(const Required& required) const {
 
     DomainResult out{Sets(graph_.K), true};
     std::vector<std::vector<std::uint64_t>> masks(graph_.K);
+
     std::vector<unsigned char> touched(graph_.K, 0);
     for (auto q : required) {
         const auto row = position_[q.layer][q.pos];
@@ -214,7 +240,9 @@ DomainResult PatternAdjacency::condition(const Required& required) const {
             auto& mask = masks[block.to];
             if (!touched[block.to]) {
                 mask.assign(block.words, UINT64_MAX);
+
                 const auto tail = ordered_[block.to].size() % 64;
+
                 if (tail) mask.back() = (1ULL << tail) - 1;
                 touched[block.to] = 1;
             }
@@ -224,18 +252,21 @@ DomainResult PatternAdjacency::condition(const Required& required) const {
     }
     for (Layer j = 0; j < graph_.K; ++j) {
         if (!touched[j]) { out.domains[j] = ordered_[j]; continue; }
+
         auto& domain = out.domains[j];
         domain.clear();
         for (std::size_t k = 0; k < masks[j].size(); ++k) {
             auto bits = masks[j][k];
             while (bits) {
                 const auto r = 64 * k + static_cast<unsigned>(__builtin_ctzll(bits));
+
                 domain.push_back(ordered_[j][r]);
                 bits &= bits - 1;
             }
         }
     }
     out.possible = contains_required(out.domains, required);
+
     return out;
 }
 } // namespace mcviz

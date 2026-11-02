@@ -11,7 +11,9 @@ struct PartnerStats {
 class PartnerRows {
 public:
     PartnerRows(const Graph& g, const LayerPattern& p, const Sets& base, std::uint64_t memory);
+    // Report whether the partner rows are available for candidate reduction.
     bool ready() const { return ready_; }
+
     std::uint64_t bytes() const { return bytes_; }
     CoreResult reduce(const Thresholds& beta, Sets domains, const Required& fixed,
                       std::uint64_t budget, PartnerStats& stats, CoreWorkspace& workspace) const;

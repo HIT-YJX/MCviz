@@ -11,8 +11,11 @@ bool spend(std::uint64_t& left, std::uint64_t a, std::uint64_t b = 1) {
     return true;
 }
 
+
+// Reserve estimated pair-processing work before applying the stronger bounds.
 bool estimate(const LayerPattern& p, const Sets& d, std::uint64_t& left) {
     if (!spend(left, p.K)) return false;
+
     for (auto e : p.edges) {
         if (!spend(left, d[e.first].size(), d[e.second].size())) return false;
         if (!spend(left, d[e.first].size(), d[e.second].size())) return false;
@@ -31,6 +34,7 @@ struct PairDegrees {
     Score mandatory_parent = 0, mandatory_child = 0;
 };
 
+// Combine degree-compatible layer sizes into a tree-based score upper bound.
 std::optional<Score> tree_upper(const Graph& g, const LayerPattern& p, Objective obj,
                                 const Thresholds& lower, const Sets& d, const Sets& q,
                                 const std::vector<Layer>& parent, const std::vector<Layer>& order) {
@@ -49,9 +53,12 @@ std::optional<Score> tree_upper(const Graph& g, const LayerPattern& p, Objective
             a.mandatory_child = std::min(a.mandatory_child, a.child[i]);
         std::sort(a.parent.rbegin(), a.parent.rend()); std::sort(a.child.rbegin(), a.child.rend());
     }
+
     std::vector<std::vector<std::optional<Score>>> dp(p.K);
+
     for (std::size_t at = order.size(); at-- > 0;) {
         Layer u = order[at];
+
         dp[u].resize(d[u].size() + 1);
         for (std::size_t a = static_cast<std::size_t>(lower[u]); a <= d[u].size(); ++a) {
             std::optional<Score> value = obj == Objective::edge ? 0 : a;
@@ -61,11 +68,14 @@ std::optional<Score> tree_upper(const Graph& g, const LayerPattern& p, Objective
                 for (std::size_t b = static_cast<std::size_t>(lower[v]); b <= d[v].size(); ++b) {
                     if (!dp[v][b] || deg.parent[a - 1] < b || deg.child[b - 1] < a ||
                         deg.mandatory_parent < b || deg.mandatory_child < a) continue;
+
                     Score candidate = *dp[v][b];
+
                     if (obj == Objective::edge) candidate = checked_add(candidate, checked_mul(a, b));
                     if (!best || candidate > *best) best = candidate;
                 }
                 if (!best) { value.reset(); break; }
+
                 if (obj == Objective::balanced) value = std::min(*value, *best);
                 else value = checked_add(*value, *best);
             }
@@ -74,15 +84,18 @@ std::optional<Score> tree_upper(const Graph& g, const LayerPattern& p, Objective
     }
     std::optional<Score> best;
     for (auto v : dp[0]) if (v && (!best || *v > *best)) best = v;
+
     return best;
 }
 }
 
+// Tighten capacity bounds using eligible tree or core reductions within budget.
 RulesUpperResult reviewed_upper(const Graph& g, const LayerPattern& p, Objective obj,
                                 const Thresholds& lower_input, const Sets& domains, const Required& required,
                                 std::uint64_t& budget, CoreBackend core_backend,
                                 CoreWorkspace* core_workspace) {
     auto conditioned = condition_domains(g, p, domains, required);
+
     const auto& d = conditioned.domains;
     Thresholds lower = lower_input;
     Sets q(p.K);
@@ -93,7 +106,9 @@ RulesUpperResult reviewed_upper(const Graph& g, const LayerPattern& p, Objective
     }
     RulesUpperResult out;
     out.possible = conditioned.possible && enough_capacity(d, lower);
+
     if (!out.possible) return out;
+
     out.upper = capacity_bound(p, obj, d);
     if (p.edges.empty()) return out;
     std::vector<Layer> parent(p.K, p.K), order{0};
@@ -105,6 +120,7 @@ RulesUpperResult reviewed_upper(const Graph& g, const LayerPattern& p, Objective
         auto left = budget;
         if (estimate(p, d, left)) {
             budget = left; out.tree_used = true;
+
             auto value = tree_upper(g, p, obj, lower, d, q, parent, order);
             if (!value) { out.possible = false; out.upper = 0; return out; }
             out.upper = std::min(out.upper, *value);
@@ -116,11 +132,13 @@ RulesUpperResult reviewed_upper(const Graph& g, const LayerPattern& p, Objective
         for (const auto& a : d) n += a.size();
         for (auto x = cap; x > 1; x >>= 1) ++trials;
         auto left = budget;
+
         bool fits = true;
 
         auto one_left = budget;
         if (!estimate(p, d, one_left)) fits = false;
         std::uint64_t one = budget - one_left;
+
         if (fits && (!spend(left, n + 1, trials) || !spend(left, one, (n + 1) * trials))) fits = false;
         if (!fits) out.budget_fallback = true;
         else {
@@ -133,6 +151,7 @@ RulesUpperResult reviewed_upper(const Graph& g, const LayerPattern& p, Objective
                 Score mid = lo + (hi - lo) / 2 + (hi - lo) % 2;
                 auto t = lower;
                 for (auto& v : t) v = std::max(v, mid);
+
                 if (reduce(g, p, t, d, required, core_backend, core_workspace).possible) lo = mid;
                 else hi = mid - 1;
             }
@@ -160,6 +179,7 @@ Thresholds improving_thresholds(const LayerPattern& p, Objective obj, const Sets
         } else rho = checked_add(L, 1);
         lower[i] = std::max({lower[i], Score(mandatory[i].size()), rho});
     }
+
     return lower;
 }
 }

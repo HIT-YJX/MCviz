@@ -11,6 +11,7 @@ ProblemType legacy_objective(Objective obj) {
     return MBSC;
 }
 
+
 std::vector<std::vector<bool>> matrix(const LayerPattern& pattern) {
     std::vector<std::vector<bool>> P(pattern.K, std::vector<bool>(pattern.K, false));
     for (auto [i, j] : pattern.edges) P[i][j] = P[j][i] = true;
@@ -19,6 +20,7 @@ std::vector<std::vector<bool>> matrix(const LayerPattern& pattern) {
 
 }
 
+// Dispatch the selected baseline and translate its maximum-clique result.
 SearchResult run(const Graph& graph, const LayerPattern& pattern, Objective objective,
                  const QueryRequest& request, const std::string& method,
                  unsigned) {
@@ -26,15 +28,18 @@ SearchResult run(const Graph& graph, const LayerPattern& pattern, Objective obje
 
     SearchResult out;
     out.sets.resize(graph.K);
+
     std::optional<LocalVertex> q;
     if (request.required) {
         q = LocalVertex{request.required->layer,
                         graph.get_pos(request.required->layer, request.required->id)};
     }
+
     std::vector<uint> tau(graph.K);
     for (Layer p = 0; p < graph.K; p++) {
         if (request.gamma[p] > graph.vertex_ids[p].size()) {
             out.status = Status::infeasible;
+
             return out;
         }
         tau[p] = static_cast<uint>(request.gamma[p]);
@@ -43,6 +48,7 @@ SearchResult run(const Graph& graph, const LayerPattern& pattern, Objective obje
     KPartiteGraph local;
     local.load(graph);
     unsigned anchor = pattern.anchor_layer;
+
     if (anchor >= graph.K) anchor = 0;
     StarCliqueFinder finder(local, legacy_objective(objective), tau, anchor);
     finder.required = q;
