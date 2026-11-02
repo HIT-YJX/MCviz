@@ -1,99 +1,96 @@
 # MCviz
 
-MCviz searches for maximum layer-pattern cliques in static multipartite graphs. This release contains MCviz, MCviz+, and four layer-pattern baselines, together with index construction, hierarchy conversion, and exact search. WordNet and LastFM are included; [datasets/Readme.md](datasets/Readme.md) describes all eight datasets used in the paper.
+MCviz finds maximum layer-pattern cliques in static multipartite graphs. This C++17 release provides MCviz, MCviz+, BCviz-M, Motif-LP, KPC-LP, and KSPC-LP, with index construction, hierarchy conversion, and exact search. WordNet and LastFM are bundled; [datasets/Readme.md](datasets/Readme.md) describes the eight paper datasets and their sources.
 
-## Problem
+## Problem and algorithms
 
-A fixed pattern `P` specifies which layer pairs require complete connections. A feasible answer selects at least `gamma[i]` vertices from every layer; selected sets must be fully connected across each edge of `P`. Other layer pairs impose no constraint. All layer thresholds are positive.
+A fixed layer pattern `P` specifies the layer pairs that require complete connections. An answer selects at least `gamma[i]` vertices in every layer and connects every selected pair across each edge of `P`. Other layer pairs impose no constraint. The paper's `edge` objective maximizes the number of selected pattern edges. MCviz and MCviz+ expose this objective in the release. The baseline interface also retains `vertex` (total selected vertices) and `balanced` (smallest selected layer). Thresholds are positive, and indexed queries require `gamma[i] >= beta[i]`, where `beta` is the construction threshold vector.
 
-The objective is the global maximum of one of three scores:
+MCviz assigns each pattern edge its exact cohesion, the maximum feasible score of a clique containing the edge. MCviz+ uses safe upper bounds in place of exact cohesion. Both build a maximum spanning forest and a component hierarchy to locate candidate regions. Their default edge query first cuts the hierarchy and applies local threshold cores, finds an initial feasible clique with a bounded heuristic, then cuts again to retain possible strict improvements. Exact regional search completes the answer; exhausting the heuristic budget does not discard unresolved search coverage.
 
-| Option | Score for selected sets `S[i]` |
+| Method | Construction or search principle |
 | --- | --- |
-| `edge` | Sum of `|S[i]| * |S[j]|` over pattern edges `(i,j)` |
-| `vertex` | Sum of `|S[i]|` over all layers |
-| `balanced` | Minimum `|S[i]|` over all layers |
+| MCviz | Exact edge cohesion with dynamic work scheduling, partner reduction, shared completed-domain scores, and witnessed bounds. |
+| MCviz+ | Automatic upper bounds: support bounds for stars, structural bounds for trees, and safe bounds for other supported patterns. |
+| BCviz-M | Degree-based edge bounds and a global vertex order organize candidate regions for exact search. |
+| Motif-LP | Candidate/exclusion enumeration with pivots retains the maximum feasible compatible set. |
+| KPC-LP | Ordered per-layer seeds and extensions use threshold and score-capacity pruning. |
+| KSPC-LP | Star queries combine maximal bicliques from center--leaf pairs; other supported queries use exhaustive subset search. |
 
-Patterns may be `star`, `complete`, `path`, `cycle`, `empty`, or a file containing one 0-based layer pair per line. `--primary` chooses the center of a star; for other patterns it is an optional search anchor and does not change the constraints. `--required layer:id` restricts the answer to contain a specified vertex. Index queries require `gamma[i] >= beta[i]`, where `beta` is the construction threshold vector. The connected-pattern index and hierarchy results apply to connected `P`; disconnected and empty patterns use separate search fallback paths.
+The four baselines are the project's layer-pattern adaptations. KSPC-LP requires all layers through `--min-layers K`. Search can take exponential time. Configured work and memory limits retain their algorithmic fallbacks, including uncached computation and cover search when Pivot admission fails. The release omits experimental strategy switches and exception recovery.
 
-## Algorithms
+Patterns are `star`, `complete`, `path`, `cycle`, `empty`, or `file:path` with one 0-based layer pair per line. `--primary` defines the star center; for other patterns it is only an optional anchor. `--required layer:id` requests a clique containing that vertex. The connected-pattern index guarantees apply to connected patterns; disconnected and empty patterns use separate fallback paths.
 
-MCviz and MCviz+ organize candidate regions by edge weights, then recover or search an exact answer under the original pattern constraints. A maximum spanning forest preserves threshold components, and the component hierarchy converts reversibly to a shared linear representation with linked layer intervals.
+## Structure and build
 
-| Method | Core idea |
-| --- | --- |
-| MCviz | Compute each required edge's exact cohesion: the largest feasible score of a clique containing that edge. Use these weights to recover witnesses or search hierarchy regions. |
-| MCviz+ | Replace exact cohesion with admissible upper bounds, including support bounds for stars. Query regions are still solved exactly. |
-| BCviz-M | Build a global vertex order from safe degree-based edge bounds, then perform exact search within the resulting candidate regions. |
-| Motif-LP | Enumerate maximal compatible sets with candidate/exclusion sets and pivots, then retain the best feasible score. |
-| KPC-LP | Choose the smallest selected vertex of each layer as a seed, extend in vertex order, and prune using threshold and score-capacity bounds. |
-| KSPC-LP | For unrestricted star queries, enumerate maximal bicliques on each center--leaf pair and combine their center intersections. Other patterns and specified-vertex queries use exhaustive subset search. |
-
-The baselines are the layer-pattern adaptations implemented in this release. KSPC-LP requires all `K` layers (`--min-layers K`). Exact search can take exponential time. MCviz exact edge construction uses the paper's general-dynamic-all policy: queue core, partner reduction, dynamic edge scheduling, a shared completed-domain cache, and witnessed bounds. MCviz+ keeps automatic star-support or structural upper bounds. Legacy exact star/singleton builders and research strategy switches are omitted. Configured work and memory budget refusals preserve exact fallback. Actual allocation or thread creation failures terminate the process.
-
-## Layout and build
-
-All algorithm code is under `src/`. The build requires CMake 3.16 or later and a C++17 compiler with standard thread support.
+All algorithm implementations are C++. CMake 3.16 or newer and a C++17 compiler with standard thread support build the executables below.
 
 ```text
-src/common/       Graph input, patterns, objectives, CLI, index files, and timing logs
+src/common/       Graph input, patterns, objectives, CLI, and timing tables
 src/search/       Exact regional search and construction helpers
-src/index/        MCviz/MCviz+ construction, query, hierarchy, and linear conversion
-src/mcviz/        MCviz executable entry
-src/mcviz_plus/   MCviz+ executable entry
+src/index/        MCviz/MCviz+ indexes, queries, hierarchy, and conversion
+src/mcviz/        MCviz entry point
+src/mcviz_plus/   MCviz+ entry point
 src/baseline/     BCviz-M, Motif-LP, KPC-LP, and KSPC-LP
 datasets/         WordNet and LastFM inputs
-Index/            Generated index files
-log/              Generated timing tables
+Index/            Generated and reused indexes
+log/              Timing TXT tables
 ```
 
-Build from the release directory:
+From this directory, run:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 1
 ```
 
-The executables appear in `build/bin/`. Default input, index, and log paths refer to `datasets/`, `Index/`, and `log/` beneath the source directory used when configuring CMake. A graph or vertex-table basename is resolved under `datasets/` when it does not exist in the current directory. `--index-dir` and `--log-dir` override output locations.
+Executables are written to `build/bin/`. A graph or vertex-table basename is resolved under `datasets/` when it is absent from the working directory. The default index and log directories are `Index/` and `log/` under the release source directory used by CMake. Use `--index-dir` and `--log-dir` to override them. No separate cohesion files are written.
 
-## Build and search
+## Defaults and execution
 
-The following Bash examples use WordNet-P3 with the path `0--1--2` and the edge objective. Its explicit vertex table is required to preserve the complete projected vertex domain. Index lookup is automatic from the graph, pattern, objective, and construction thresholds; `--index name.idx` can select a file in `Index/` explicitly.
+The exported policies follow the production defaults of November 1, 2026. MCviz exact edge construction uses `general-dynamic-all` with 32 workers. MCviz+ requests 32 workers for applicable star-support construction; nonparallel upper-bound routes use one worker. MCviz and MCviz+ queries use `seed-core`, automatic Pivot with dynamic ordering, a 512 MiB per-region Pivot budget, and a 1,000 ms initial-solution budget. Search is single-threaded. Actual worker counts may be limited by task size and cache admission.
+
+Use `--build-threads 1` for small local runs. `--pivot-memory-mb` and `--query-heuristic-ms` set the search budgets; a zero Pivot budget selects cover fallback. The paper's larger Freebase, DRKG, and AMiner heuristic budgets require explicit `--query-heuristic-ms 60000`; the program does not choose them from dataset names.
+
+The following Bash example builds and queries WordNet-P3. Its explicit vertex table preserves the complete projected domain, including isolated vertices. The paper's main query threshold is `4,4,4`; use `2,2,2` to run the smaller-threshold example on the same indexes.
 
 ```bash
 args=(--graph wordnet-p3.txt --vertices wordnet-p3.vertices.tsv
       --layers 3 --pattern path --primary 1 --objective edge)
 
 for exe in mcviz_layer mcviz_plus_layer; do
-    build/bin/$exe construct "${args[@]}" --beta 2,2,2
-    build/bin/$exe query "${args[@]}" --beta 2,2,2 --gamma 2,2,2 --pivot-memory-mb 512
+    build/bin/$exe construct "${args[@]}" --beta 2,2,2 --build-threads 1
+    build/bin/$exe query "${args[@]}" --beta 2,2,2 --gamma 4,4,4
 done
+
+# Query the same WordNet index with a smaller feasible threshold.
+build/bin/mcviz_layer query "${args[@]}" --beta 2,2,2 --gamma 2,2,2
+
+# Exercise budget fallback without the heuristic or Pivot workspace.
+build/bin/mcviz_layer query "${args[@]}" --beta 2,2,2 --gamma 2,2,2 \
+    --query-heuristic-ms 0 --pivot-memory-mb 0
 
 build/bin/baseline_layer construct "${args[@]}" --method bcvizm --beta 2,2,2
-build/bin/baseline_layer query "${args[@]}" --method bcvizm --beta 2,2,2 --gamma 2,2,2
-```
+build/bin/baseline_layer query "${args[@]}" --method bcvizm --beta 2,2,2 --gamma 4,4,4
 
-All four baselines also support an independent `solve` call. BCviz-M builds its order within that call; the other three methods search directly.
-
-```bash
-for method in bcvizm motif kpc; do
-    build/bin/baseline_layer solve "${args[@]}" --method "$method" --gamma 2,2,2
+for method in motif kpc; do
+    build/bin/baseline_layer solve "${args[@]}" --method "$method" --gamma 4,4,4
 done
-build/bin/baseline_layer solve "${args[@]}" --method kspc --min-layers 3 --gamma 2,2,2
+build/bin/baseline_layer solve "${args[@]}" --method kspc --min-layers 3 --gamma 4,4,4
 ```
 
-For LastFM, replace the shared arguments with the following and use the same construction/query commands:
+Index lookup matches the graph, pattern, objective, and construction thresholds. An explicit `--index name.idx` selects a file in `Index/`. BCviz-M also supports `solve`, which constructs its order within the call. For LastFM, replace the shared arguments and repeat the commands:
 
 ```bash
 args=(--graph lastfm_hetrec_k3.txt --layers 3
       --pattern star --primary 0 --objective edge)
 ```
 
-Search uses one thread. New MCviz+ star constructions accept `--build-threads N` (default `1`, maximum `64`). MCviz and MCviz+ accept `--pivot-memory-mb N` (default `64`); a zero budget selects the existing cover-search fallback. Use `--help` on either search executable for the remaining input options.
+## Hierarchy conversion and output
 
-## Hierarchy conversion and logs
+The conversion program loads an index, converts its component hierarchy to the project's shared linear representation, and restores the hierarchy in memory. The shared representation preserves cross-layer component identities; it is distinct from independently stored per-layer orders.
 
-The conversion executable loads a connected-pattern index, converts its hierarchy to the shared linear representation, and converts it back in memory. It records each conversion phase separately. After constructing the WordNet-P3 indexes above, run:
+After building the WordNet-P3 indexes, run:
 
 ```bash
 for mode in exact upper; do
@@ -103,23 +100,6 @@ for mode in exact upper; do
 done
 ```
 
-Commands print a short status summary and append typed TSV records to `log/builds.txt`, `log/searches.txt`, or `log/conversions.txt`. The tables use the `MCviz-test2 TSV v1` marker, followed by column names, types, and data; `\N` denotes a missing value. Threshold vectors and canonical pattern edges occupy structured cells within the TXT table.
+Commands append compact typed TSV tables to `log/builds.txt`, `log/searches.txt`, and `log/conversions.txt`. Each table begins with the `MCviz-test2 TSV v1` marker, column names, and column types; `\N` represents a missing value. Records include method, input configuration, status, and timing, with result scores for searches and sizes for indexes and representations. Reusing an index records `status=reused` without a new construction time. Infeasibility is distinguished from interruption, and a feasible zero-score answer retains `found=true`.
 
-Build time measures the construction kernel, excluding input loading and index writing. Search time starts at CLI entry and includes graph/index input and search; a BCviz-M `solve` also includes order construction. It excludes process creation and logging, so it is distinct from the paper's process-wall query timings. Conversion time measures each in-memory conversion; representation sizes are logical bytes. `value_seconds`, `value_mib`, and `value_ms` are plotting-unit aliases where provided.
-
-Reusing an index records `status=reused` with no new construction time. A completed infeasible search records `status=ok`, `found=false`, and no score; a feasible zero-score answer retains `found=true`. Repeated runs append rows. Select the intended configuration and repetition before passing records to fixed-matrix plotters; these files contain only operations actually run, not a complete eight-dataset experiment matrix or ablation study.
-
-## Paper construction configuration
-
-Use a fresh index directory when measuring construction. MCviz edge builds use the following parameters from paper-exp.md; the default thread count remains one.
-
-```bash
-build/bin/mcviz_layer construct "${args[@]}" --beta 2,2,2 \
-    --cohesion-strategy general-dynamic-all --solver auto --build-threads 32 \
-    --build-core queue --build-filter off --cohesion-work-budget 1000000000 \
-    --cohesion-cache-mb 8192 --pivot-memory-mb 512
-```
-
-For MCviz+, use automatic upper-bound construction with one worker and the default support-cache policy. Search uses `--pivot-memory-mb 512` and one thread. Historical singleton and ablation configurations in paper-exp.md are not production options in this release. Non-edge objectives retain generic exact construction; their timing is outside the paper configuration.
-
-No exception recovery is installed. Configured cache admission refusals use sparse adjacency or uncached computation; partner-work refusal retains unresolved candidates; Pivot admission refusal uses cover search; butterfly-work refusal leaves unprocessed edges available. Actual resource allocation and thread-creation failures are fatal.
+Build time excludes graph loading and index writing. Search time includes graph/index loading and search from CLI entry, excluding process creation and log writing. Conversion times cover the two in-memory transformations. These timing scopes should be matched explicitly when comparing to paper plots. Repeated runs append rows; select the intended configuration and repetitions before plotting.

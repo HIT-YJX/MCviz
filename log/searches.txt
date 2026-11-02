@@ -1,0 +1,8 @@
+# MCviz-test2 TSV v1
+dataset	method	status	found	score	seconds	objective	beta	gamma	required	pattern	primary
+text	text	text	bool	number	number	text	json	json	text	json	number
+wordnet-p3	mcviz	ok	true	12	0.012181608	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1
+wordnet-p3	mcviz-plus	ok	true	12	0.010768649999999999	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1
+wordnet-p3	mcviz	ok	false	\N	0.010199420000000001	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
+wordnet-p3	mcviz-plus	ok	false	\N	0.010169986000000001	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
+wordnet-p3	bcvizm	ok	true	12	0.021853655999999999	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1

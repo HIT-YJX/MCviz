@@ -1,0 +1,6 @@
+# MCviz-test2 TSV v1
+dataset	method	status	seconds	bytes	value_seconds	value_mib	objective	beta	pattern	primary	threads	reused
+text	text	text	number	number	number	number	text	json	json	number	number	bool
+wordnet-p3	mcviz	ok	0.0037082349999999998	63967	0.0037082349999999998	0.061003684997558594	edge	[2,2,2]	[[0,1],[1,2]]	1	1	false
+wordnet-p3	mcviz-plus	ok	0.0027601269999999998	64015	0.0027601269999999998	0.061049461364746094	edge	[2,2,2]	[[0,1],[1,2]]	1	1	false
+wordnet-p3	bcvizm	ok	0.048678638000000003	40649	0.048678638000000003	0.038765907287597656	edge	[2,2,2]	[[0,1],[1,2]]	1	1	false

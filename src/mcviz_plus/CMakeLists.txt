@@ -1,0 +1,2 @@
+add_executable(mcviz_plus_layer main.cpp)
+target_link_libraries(mcviz_plus_layer PRIVATE mcviz_pattern_index)

@@ -1,0 +1,7 @@
+# MCviz-test2 TSV v1
+dataset	method	status	direction	seconds	value_ms	tree_bytes	linear_bytes	objective	beta	pattern	primary
+text	text	text	text	number	number	number	number	text	json	json	number
+wordnet-p3	mcviz	ok	tree_to_linear	0.000107088	0.107088	66080	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+wordnet-p3	mcviz	ok	linear_to_tree	8.9214000000000003e-05	0.089214000000000002	66080	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+wordnet-p3	mcviz-plus	ok	tree_to_linear	0.000114925	0.114925	66128	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+wordnet-p3	mcviz-plus	ok	linear_to_tree	9.577e-05	0.095769999999999994	66128	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
