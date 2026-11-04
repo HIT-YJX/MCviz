@@ -15,6 +15,16 @@ This release includes WordNet and LastFM. The table uses the names and abbreviat
 
 WordNet uses version 3.0, LastFM uses HetRec 2011 tagging events, and Hetionet uses version 1.0. DRKG is a biomedical knowledge graph that includes Hetionet data. BibSonomy connects users, tags, and bookmarked items; its processed input comes from [KONECT](http://konect.cc/). Freebase uses six music entity types from Freebase Easy. YouTube comes from SNAP and uses constructed partitions, not native semantic types. AMiner comes from the metapath2vec dataset release. The other six processed graphs are not bundled.
 
+## Downloading AMiner
+
+Download `AMiner.txt.gz` from the [MCviz datasets repository](https://github.com/HIT-YJX/MCviz-datasets) and place it in this `datasets/` directory. The uncompressed `AMiner.txt` is omitted from GitHub because of its size. From this directory, extract it while keeping the compressed file:
+
+```bash
+gzip -dk AMiner.txt.gz
+```
+
+Use the resulting `AMiner.txt` as the graph input.
+
 ## Included inputs
 
 WordNet is provided as the full processed 25-layer graph and the three-layer workload used in the main experiments. LastFM is provided as the complete processed three-layer graph.
