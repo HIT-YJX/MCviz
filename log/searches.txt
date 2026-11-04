@@ -1,8 +1,16 @@
 # MCviz-test2 TSV v1
 dataset	method	status	found	score	seconds	objective	beta	gamma	required	pattern	primary
 text	text	text	bool	number	number	text	json	json	text	json	number
-wordnet-p3	mcviz	ok	true	12	0.012181608	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1
-wordnet-p3	mcviz-plus	ok	true	12	0.010768649999999999	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1
-wordnet-p3	mcviz	ok	false	\N	0.010199420000000001	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
-wordnet-p3	mcviz-plus	ok	false	\N	0.010169986000000001	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
-wordnet-p3	bcvizm	ok	true	12	0.021853655999999999	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1
+WordNet-P3	mcviz	ok	true	12	0.012181608	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	true	12	0.010768649999999999	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1
+WordNet-P3	mcviz	ok	false	\N	0.010199420000000001	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	false	\N	0.010169986000000001	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
+WordNet-P3	bcvizm	ok	true	12	0.021853655999999999	edge	[2,2,2]	[2,2,2]	\N	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	false	\N	0.012803362	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	false	\N	0.0074940629999999996	vertex	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	false	\N	0.011813908	balanced	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
+WordNet-P3	mcviz	ok	false	\N	0.012212323000000001	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[1,2]]	1
+LastFM	mcviz-plus	ok	true	216	16.963520646999999	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[0,2]]	0
+LastFM	mcviz-plus	ok	true	58	8.2573653819999997	vertex	[2,2,2]	[4,4,4]	\N	[[0,1],[0,2]]	0
+LastFM	mcviz-plus	ok	true	8	3.1224822720000001	balanced	[2,2,2]	[4,4,4]	\N	[[0,1],[0,2]]	0
+LastFM	mcviz	ok	true	216	3.3533205810000002	edge	[2,2,2]	[4,4,4]	\N	[[0,1],[0,2]]	0

@@ -1,7 +1,15 @@
 # MCviz-test2 TSV v1
 dataset	method	status	direction	seconds	value_ms	tree_bytes	linear_bytes	objective	beta	pattern	primary
 text	text	text	text	number	number	number	number	text	json	json	number
-wordnet-p3	mcviz	ok	tree_to_linear	0.000107088	0.107088	66080	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
-wordnet-p3	mcviz	ok	linear_to_tree	8.9214000000000003e-05	0.089214000000000002	66080	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
-wordnet-p3	mcviz-plus	ok	tree_to_linear	0.000114925	0.114925	66128	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
-wordnet-p3	mcviz-plus	ok	linear_to_tree	9.577e-05	0.095769999999999994	66128	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+WordNet-P3	mcviz	ok	tree_to_linear	0.000107088	0.107088	66080	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+WordNet-P3	mcviz	ok	linear_to_tree	8.9214000000000003e-05	0.089214000000000002	66080	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	tree_to_linear	0.000114925	0.114925	66128	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	linear_to_tree	9.577e-05	0.095769999999999994	66128	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	tree_to_linear	0.000214114	0.214114	66128	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+WordNet-P3	mcviz-plus	ok	linear_to_tree	0.00020875900000000001	0.208759	66128	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+WordNet-P3	mcviz	ok	tree_to_linear	0.00019177300000000001	0.191773	66080	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+WordNet-P3	mcviz	ok	linear_to_tree	0.00016685199999999999	0.166852	66080	183104	edge	[2,2,2]	[[0,1],[1,2]]	1
+LastFM	mcviz-plus	ok	tree_to_linear	0.00053800099999999997	0.53800099999999995	600112	1546632	edge	[2,2,2]	[[0,1],[0,2]]	0
+LastFM	mcviz-plus	ok	linear_to_tree	0.00032054300000000001	0.32054300000000002	600112	1546632	edge	[2,2,2]	[[0,1],[0,2]]	0
+LastFM	mcviz	ok	tree_to_linear	0.00054383000000000003	0.54383000000000004	583200	1546632	edge	[2,2,2]	[[0,1],[0,2]]	0
+LastFM	mcviz	ok	linear_to_tree	0.000228452	0.22845199999999999	583200	1546632	edge	[2,2,2]	[[0,1],[0,2]]	0

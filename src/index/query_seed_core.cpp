@@ -81,7 +81,7 @@ public:
 
 
 
-    /* Regression example: a zero heuristic budget skips seed construction.
+    /* A zero heuristic budget skips seed construction.
        Both cuts still cover every improving clique, so the exact answer is unchanged. */
     bool execute() {
         run.counters["query_seed_core_used"]=1;

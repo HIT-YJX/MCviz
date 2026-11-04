@@ -20,9 +20,15 @@ std::string alias(const std::string& stem) {
         {"lastfm_hetrec_k3","lastfm"},{"acm_k4","acm"},{"bibsonomy_k3","bibsonomy"},
         {"aminer_k3","aminer"},{"WikiPedia_k2","wikipedia"},{"marvel_k2","marvel"},
         {"movielens25m_k3","movielens"},{"writer_k2","writer"},{"youtube","youtube"},
-        {"hetionet_k6","hetionet"},{"drkg_k5","drkg"},{"wordnet_k25","wordnet"}};
+        {"hetionet_k6","hetionet"},{"drkg_k5","drkg"},{"wordnet_k25","wordnet"},
+        {"WordNet","WordNet"},{"WordNet-P3","WordNet-P3"},{"LastFM","LastFM"},
+        {"Hetionet","hetionet"},{"DRKG","drkg"},{"BibSonomy","bibsonomy"},
+        {"Freebase","freebase"},{"YouTube","youtube"},{"AMiner","aminer"}};
     auto i = names.find(stem);
     auto name = i == names.end() ? stem : i->second;
+    if (name == "wordnet") name = "WordNet";
+    if (name == "wordnet-p3") name = "WordNet-P3";
+    if (name == "lastfm") name = "LastFM";
     return name;
 }
 

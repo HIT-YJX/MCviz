@@ -39,6 +39,9 @@ std::string dataset(const CliOptions& opt, const BuildSpec& spec) {
     if (it != names.end()) name = it->second;
     const std::vector<std::pair<Layer, Layer>> tree{{0, 2}, {0, 3}, {0, 4}, {1, 4}};
     if (name == "drkg" && spec.pattern.K == 5 && spec.pattern.edges == tree) name = "drkg-tree";
+    if (name == "wordnet") name = "WordNet";
+    if (name == "wordnet-p3") name = "WordNet-P3";
+    if (name == "lastfm") name = "LastFM";
     return name;
 }
 

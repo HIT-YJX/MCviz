@@ -144,7 +144,8 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
     auto filtered = prepare_build_filter(idx, g, spec, core.possible);
     const auto& domains = filtered.domains;
     core.possible = filtered.possible;
-    bool prepared = engine == Engine::upper && optimized && core.possible && idx.bound == "star-support";
+    bool prepared = optimized && core.possible &&
+        (engine == Engine::exact || idx.bound == "star-support");
 
     if (prepared) {
         started = std::chrono::steady_clock::now();
@@ -156,13 +157,45 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
         started = std::chrono::steady_clock::now();
         std::vector<Score> values;
 
+        if (engine == Engine::exact) {
+            capacity_bound(p, spec.objective, domains); // Checked arithmetic before legacy helpers.
+            auto result = exact_star_build(view.graph, p, spec.objective, spec.beta,
+                                           options.star_build_primary_limit, options.star_build_work_budget,
+                                           options.star_build_anchor, options.star_build_anchor_work_budget, options.search.pivot_memory_bytes);
+            add_stats(idx.build_stats, result.solver_stats);
+            idx.build_strategy = result.shared_completed ? "star-shared-pivot" : "star-fixed-core";
+            if (result.anchor_attempts)
+                idx.build_strategy = result.anchor_budget_fallback || result.anchor_memory_fallback
+                    ? "star-anchor-mixed" : "star-anchor-pivot";
+            idx.build_counters["build_shared_attempts"] = result.shared_attempted;
+            idx.build_counters["build_shared_completed"] = result.shared_completed;
+            idx.build_counters["build_shared_budget_fallback"] = result.budget_fallback;
+            idx.build_counters["build_shared_memory_fallback"] = result.memory_fallback;
+            idx.build_counters["build_shared_witnesses"] = result.shared_witnesses;
+            idx.build_counters["build_shared_nodes"] = result.shared_nodes;
+            idx.build_counters["build_shared_publications"] = result.shared_publications;
+            idx.build_counters["build_shared_work"] = result.shared_work;
+            idx.build_counters["build_anchor_attempts"] = result.anchor_attempts;
+            idx.build_counters["build_anchor_completed"] = result.anchor_completed;
+            idx.build_counters["build_anchor_empty_domains"] = result.anchor_empty_domains;
+            idx.build_counters["build_anchor_budget_fallback"] = result.anchor_budget_fallback;
+            idx.build_counters["build_anchor_memory_fallback"] = result.anchor_memory_fallback;
+            idx.build_counters["build_anchor_nodes"] = result.anchor_nodes;
+            idx.build_counters["build_anchor_witnesses"] = result.anchor_witnesses;
+            idx.build_counters["build_anchor_publications"] = result.anchor_publications;
+            idx.build_counters["build_anchor_work"] = result.anchor_work;
+            idx.build_counters["build_anchor_partial_publications"] = result.anchor_partial_publications;
+            idx.build_counters["build_exact_edge_calls"] = result.edge_calls;
+            idx.build_solver_calls = result.shared_attempted + result.anchor_attempts + result.edge_calls;
+            values = std::move(result.values);
+        } else if (idx.bound == "star-support") {
             auto result = build_star_support(view.graph, p, spec.objective, spec.beta,
                                              options.build_threads, options.support_cache_bytes);
             idx.build_strategy = result.strategy;
             for (const auto& item : result.counters) idx.build_counters[item.first] = item.second;
             for (const auto& item : result.timing) idx.build_timing[item.first] = item.second;
             values = std::move(result.values);
-        
+        }
         std::size_t active = 0;
         for (std::size_t id = 0; id < g.edges.size(); ++id) {
             const auto& e = g.edges[id];
@@ -201,6 +234,7 @@ PatternIndex PatternIndex::construct(const Graph& g, const BuildSpec& spec, Engi
                     auto r = solve_region(g, p, spec.objective, spec.beta, domains, fixed, {}, idx.options.search);
                     ++idx.build_solver_calls;
                     add_stats(idx.build_stats, r.stats);
+                    require(r.complete, "Exact build incomplete: no index was published");
                     if (r.best.found) value = r.best.score;
                 } else if (idx.bound == "star-support") {
                     value = star_edge_bound(g, p, spec.objective, spec.beta, domains, e, idx.bound == "star-support");

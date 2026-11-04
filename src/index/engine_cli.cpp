@@ -38,7 +38,10 @@ std::cout << cli_help();
     bool reused = false;
     if (opt.command == "construct") {
         const auto spec = build_spec(opt);
-        require(spec.objective == Objective::edge, "MCviz release indexes use the paper edge objective");
+        require(opt.cohesion_strategy == "auto" ||
+                (engine == Engine::exact && spec.objective == Objective::edge &&
+                 !spec.pattern.edges.empty() && spec.pattern.connected()),
+                "general-dynamic-all requires a connected exact edge build");
         if (!opt.build_threads_explicit) {
             const auto& p = spec.pattern;
             bool dynamic = engine == Engine::exact && spec.objective == Objective::edge && !p.edges.empty() && p.connected();
@@ -75,6 +78,12 @@ std::cout << cli_help();
             std::filesystem::copy_file(path, opt.index_file);
             path = opt.index_file;
         }
+        if (!reused && (idx.build_counters["build_shared_budget_fallback"] ||
+                        idx.build_counters["build_shared_memory_fallback"] ||
+                        idx.build_counters["build_anchor_budget_fallback"] ||
+                        idx.build_counters["build_anchor_memory_fallback"])) {
+std::cout << "star construction status=exact-fallback\n";
+        }
         log_build(opt, idx.identity.spec, method, build_seconds, std::filesystem::file_size(path), reused);
         return 0;
     }
@@ -82,12 +91,10 @@ std::cout << cli_help();
     if (path.empty()) {
         const auto spec = build_spec(opt);
 
-        require(spec.objective == Objective::edge, "MCviz release indexes use the paper edge objective");
         const auto paths = library_paths(opt, g, spec, name);
         path = find_library_index(paths, g, spec, engine_name(engine));
     }
     idx = PatternIndex::load(g, path, engine);
-    require(idx.identity.spec.objective == Objective::edge, "MCviz release queries use the paper edge objective");
 
     idx.options.search.pivot_memory_bytes = opt.pivot_memory_bytes;
     idx.options.query_heuristic_ms = opt.query_heuristic_ms;

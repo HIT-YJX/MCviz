@@ -4,13 +4,13 @@ MCviz finds maximum layer-pattern cliques in static multipartite graphs. This C+
 
 ## Problem and algorithms
 
-A fixed layer pattern `P` specifies the layer pairs that require complete connections. An answer selects at least `gamma[i]` vertices in every layer and connects every selected pair across each edge of `P`. Other layer pairs impose no constraint. The paper's `edge` objective maximizes the number of selected pattern edges. MCviz and MCviz+ expose this objective in the release. The baseline interface also retains `vertex` (total selected vertices) and `balanced` (smallest selected layer). Thresholds are positive, and indexed queries require `gamma[i] >= beta[i]`, where `beta` is the construction threshold vector.
+A fixed layer pattern `P` specifies the layer pairs that require complete connections. An answer selects at least `gamma[i]` vertices in every layer and connects every selected pair across each edge of `P`. Other layer pairs impose no constraint. The `edge` objective maximizes the number of selected pattern edges; `vertex` maximizes the total selected vertices; and `balanced` maximizes the size of the smallest selected layer. All release algorithms support these three objectives. Thresholds are positive, and indexed queries require `gamma[i] >= beta[i]`, where `beta` is the construction threshold vector.
 
-MCviz assigns each pattern edge its exact cohesion, the maximum feasible score of a clique containing the edge. MCviz+ uses safe upper bounds in place of exact cohesion. Both build a maximum spanning forest and a component hierarchy to locate candidate regions. Their default edge query first cuts the hierarchy and applies local threshold cores, finds an initial feasible clique with a bounded heuristic, then cuts again to retain possible strict improvements. Exact regional search completes the answer; exhausting the heuristic budget does not discard unresolved search coverage.
+MCviz assigns each pattern edge its exact cohesion, the maximum feasible objective score of a clique containing the edge. MCviz+ uses safe upper bounds in place of exact cohesion. Both build a maximum spanning forest and a component hierarchy to locate candidate regions. Their default query first cuts the hierarchy and applies local threshold cores, finds an initial feasible clique with a bounded heuristic, then cuts again to retain possible strict improvements. Exact regional search completes the answer; exhausting the heuristic budget does not discard unresolved search coverage.
 
 | Method | Construction or search principle |
 | --- | --- |
-| MCviz | Exact edge cohesion with dynamic work scheduling, partner reduction, shared completed-domain scores, and witnessed bounds. |
+| MCviz | Exact cohesion: dynamic construction for `edge`; shared and anchor-based star enumeration for `vertex` and `balanced`, with exact per-edge fallback. |
 | MCviz+ | Automatic upper bounds: support bounds for stars, structural bounds for trees, and safe bounds for other supported patterns. |
 | BCviz-M | Degree-based edge bounds and a global vertex order organize candidate regions for exact search. |
 | Motif-LP | Candidate/exclusion enumeration with pivots retains the maximum feasible compatible set. |
@@ -44,24 +44,25 @@ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --parallel 1
 ```
 
-Executables are written to `build/bin/`. A graph or vertex-table basename is resolved under `datasets/` when it is absent from the working directory. The default index and log directories are `Index/` and `log/` under the release source directory used by CMake. Use `--index-dir` and `--log-dir` to override them. No separate cohesion files are written.
+Executables are written to `build/bin/`. A graph or vertex-table basename is resolved under `datasets/` when it is absent from the working directory. The default index and log directories are `Index/` and `log/` under the release source directory used by CMake. The commands below use these default directories directly, without run-specific subdirectories. Run each command separately; timing records append to the corresponding TXT file in `log/`. No separate cohesion files are written.
 
 ## Defaults and execution
 
-The exported policies follow the production defaults of November 1, 2026. MCviz exact edge construction uses `general-dynamic-all` with 32 workers. MCviz+ requests 32 workers for applicable star-support construction; nonparallel upper-bound routes use one worker. MCviz and MCviz+ queries use `seed-core`, automatic Pivot with dynamic ordering, a 512 MiB per-region Pivot budget, and a 1,000 ms initial-solution budget. Search is single-threaded. Actual worker counts may be limited by task size and cache admission.
+The exported policies follow the production defaults of November 1, 2026. MCviz exact `edge` construction uses `general-dynamic-all` with 32 workers on connected nonempty patterns. For `vertex` and `balanced`, star construction uses shared and anchor-based enumeration with exact per-edge fallback when configured budgets are exhausted; other patterns retain exact regional construction. These non-edge construction routes use one worker. MCviz+ requests 32 workers for applicable star-support construction; nonparallel upper-bound routes use one worker. MCviz and MCviz+ queries use `seed-core`, automatic Pivot with dynamic ordering, a 512 MiB per-region Pivot budget, and a 1,000 ms initial-solution budget. Search is single-threaded. Actual worker counts may be limited by task size and cache admission.
 
 Use `--build-threads 1` for small local runs. `--pivot-memory-mb` and `--query-heuristic-ms` set the search budgets; a zero Pivot budget selects cover fallback. The paper's larger Freebase, DRKG, and AMiner heuristic budgets require explicit `--query-heuristic-ms 60000`; the program does not choose them from dataset names.
 
 The following Bash example builds and queries WordNet-P3. Its explicit vertex table preserves the complete projected domain, including isolated vertices. The paper's main query threshold is `4,4,4`; use `2,2,2` to run the smaller-threshold example on the same indexes.
 
 ```bash
-args=(--graph wordnet-p3.txt --vertices wordnet-p3.vertices.tsv
+args=(--graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv
       --layers 3 --pattern path --primary 1 --objective edge)
 
-for exe in mcviz_layer mcviz_plus_layer; do
-    build/bin/$exe construct "${args[@]}" --beta 2,2,2 --build-threads 1
-    build/bin/$exe query "${args[@]}" --beta 2,2,2 --gamma 4,4,4
-done
+build/bin/mcviz_layer construct "${args[@]}" --beta 2,2,2 --build-threads 1
+build/bin/mcviz_layer query "${args[@]}" --beta 2,2,2 --gamma 4,4,4
+
+build/bin/mcviz_plus_layer construct "${args[@]}" --beta 2,2,2 --build-threads 1
+build/bin/mcviz_plus_layer query "${args[@]}" --beta 2,2,2 --gamma 4,4,4
 
 # Query the same WordNet index with a smaller feasible threshold.
 build/bin/mcviz_layer query "${args[@]}" --beta 2,2,2 --gamma 2,2,2
@@ -79,10 +80,29 @@ done
 build/bin/baseline_layer solve "${args[@]}" --method kspc --min-layers 3 --gamma 4,4,4
 ```
 
+For MCviz+ on LastFM, run the following commands individually to build at beta=2 and query at gamma=4:
+
+```bash
+graph=(--graph LastFM.txt --layers 3 --pattern star --primary 0)
+
+build/bin/mcviz_plus_layer construct "${graph[@]}" --objective edge --beta 2,2,2 --build-threads 1
+build/bin/mcviz_plus_layer query "${graph[@]}" --objective edge --beta 2,2,2 --gamma 4,4,4
+
+build/bin/mcviz_plus_layer construct "${graph[@]}" --objective vertex --beta 2,2,2 --build-threads 1
+build/bin/mcviz_plus_layer query "${graph[@]}" --objective vertex --beta 2,2,2 --gamma 4,4,4
+
+build/bin/mcviz_plus_layer construct "${graph[@]}" --objective balanced --beta 2,2,2 --build-threads 1
+build/bin/mcviz_plus_layer query "${graph[@]}" --objective balanced --beta 2,2,2 --gamma 4,4,4
+```
+
+Use `mcviz_layer` for the corresponding MCviz commands. For WordNet-P3, replace `graph` with `(--graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv --layers 3 --pattern path --primary 1)`.
+
+Each objective has its own index; an index built for one objective must not be used for another.
+
 Index lookup matches the graph, pattern, objective, and construction thresholds. An explicit `--index name.idx` selects a file in `Index/`. BCviz-M also supports `solve`, which constructs its order within the call. For LastFM, replace the shared arguments and repeat the commands:
 
 ```bash
-args=(--graph lastfm_hetrec_k3.txt --layers 3
+args=(--graph LastFM.txt --layers 3
       --pattern star --primary 0 --objective edge)
 ```
 
@@ -93,13 +113,15 @@ The conversion program loads an index, converts its component hierarchy to the p
 After building the WordNet-P3 indexes, run:
 
 ```bash
-for mode in exact upper; do
-    build/bin/mcviz_representation_conversion "$mode" query \
-        --graph wordnet-p3.txt --vertices wordnet-p3.vertices.tsv \
-        --layers 3 --pattern path --primary 1 --objective edge --beta 2,2,2
-done
+build/bin/mcviz_representation_conversion exact query \
+    --graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv \
+    --layers 3 --pattern path --primary 1 --objective edge --beta 2,2,2
+
+build/bin/mcviz_representation_conversion upper query \
+    --graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv \
+    --layers 3 --pattern path --primary 1 --objective edge --beta 2,2,2
 ```
 
-Commands append compact typed TSV tables to `log/builds.txt`, `log/searches.txt`, and `log/conversions.txt`. Each table begins with the `MCviz-test2 TSV v1` marker, column names, and column types; `\N` represents a missing value. Records include method, input configuration, status, and timing, with result scores for searches and sizes for indexes and representations. Reusing an index records `status=reused` without a new construction time. Infeasibility is distinguished from interruption, and a feasible zero-score answer retains `found=true`.
+Commands append compact typed TSV tables to `log/builds.txt`, `log/searches.txt`, and `log/conversions.txt`. Each table begins with the `MCviz-test2 TSV v1` marker, column names, and column types; `\N` represents a missing value. Records include method, input configuration, status, and timing, with result scores for searches and sizes for indexes and representations. A compatible existing index is reused rather than rebuilt; this records `status=reused` without a new construction time. Infeasibility is distinguished from interruption, and a feasible zero-score answer retains `found=true`.
 
 Build time excludes graph loading and index writing. Search time includes graph/index loading and search from CLI entry, excluding process creation and log writing. Conversion times cover the two in-memory transformations. These timing scopes should be matched explicitly when comparing to paper plots. Repeated runs append rows; select the intended configuration and repetitions before plotting.

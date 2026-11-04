@@ -15,6 +15,10 @@ struct IndexOptions {
     std::uint64_t build_filter_work_budget = 100000000, build_filter_cache_bytes = 64ULL << 20;
     bool build_capacity_degrees = true;
     bool optimize_star_build = true;
+    std::uint64_t star_build_work_budget = 20000000;
+    unsigned star_build_primary_limit = 2048;
+    bool star_build_anchor = true;
+    std::uint64_t star_build_anchor_work_budget = 20000000;
     unsigned build_threads = 1;
     std::uint64_t support_cache_bytes = 64ULL << 20;
     std::uint64_t query_heuristic_ms = 1000;
