@@ -22,9 +22,8 @@ struct StarWeightBuild {
 };
 
 StarBuildView prepare_star_build(const Graph& g, const LayerPattern& p, const Sets& core);
-StarWeightBuild exact_star_build(const Graph& active, const LayerPattern& p,
-                                Objective obj, const Thresholds& beta,
-                                unsigned primary_limit, std::uint64_t work_budget,
-                                bool anchors, std::uint64_t anchor_work_budget,
-                                std::uint64_t pivot_memory_bytes = 64ULL << 20);
+StarWeightBuild exact_star_build(const Graph& active, const LayerPattern& p, Objective obj,
+                                 const Thresholds& beta, unsigned primary_limit, std::uint64_t work_budget,
+                                 bool anchors, std::uint64_t anchor_work_budget,
+                                 std::uint64_t pivot_memory_bytes = 64ULL << 20);
 } // namespace mcviz

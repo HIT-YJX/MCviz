@@ -33,6 +33,7 @@ src/mcviz/        MCviz entry point
 src/mcviz_plus/   MCviz+ entry point
 src/baseline/     BCviz-M, Motif-LP, KPC-LP, and KSPC-LP
 datasets/         WordNet and LastFM inputs
+patterns/         WordNet path and DRKG tree patterns
 Index/            Generated and reused indexes
 log/              Timing TXT tables
 ```
@@ -52,11 +53,13 @@ The exported policies follow the production defaults of November 1, 2026. MCviz 
 
 Use `--build-threads 1` for small local runs. `--pivot-memory-mb` and `--query-heuristic-ms` set the search budgets; a zero Pivot budget selects cover fallback. The paper's larger Freebase, DRKG, and AMiner heuristic budgets require explicit `--query-heuristic-ms 60000`; the program does not choose them from dataset names.
 
+The pattern files use zero-based layer IDs. [patterns/WordNet.pattern](patterns/WordNet.pattern) records the original path `12--13--14`; the paper uses only these three layers, projected and renumbered to `0--1--2` in [patterns/WordNet-P3.pattern](patterns/WordNet-P3.pattern). [patterns/DRKG-tree.pattern](patterns/DRKG-tree.pattern) records the five-layer DRKG tree. Pattern paths below are relative to the release directory.
+
 The following Bash example builds and queries WordNet-P3. Its explicit vertex table preserves the complete projected domain, including isolated vertices. The paper's main query threshold is `4,4,4`; use `2,2,2` to run the smaller-threshold example on the same indexes.
 
 ```bash
 args=(--graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv
-      --layers 3 --pattern path --primary 1 --objective edge)
+      --layers 3 --pattern file:patterns/WordNet-P3.pattern --primary 1 --objective edge)
 
 build/bin/mcviz_layer construct "${args[@]}" --beta 2,2,2 --build-threads 1
 build/bin/mcviz_layer query "${args[@]}" --beta 2,2,2 --gamma 4,4,4
@@ -95,7 +98,7 @@ build/bin/mcviz_plus_layer construct "${graph[@]}" --objective balanced --beta 2
 build/bin/mcviz_plus_layer query "${graph[@]}" --objective balanced --beta 2,2,2 --gamma 4,4,4
 ```
 
-Use `mcviz_layer` for the corresponding MCviz commands. For WordNet-P3, replace `graph` with `(--graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv --layers 3 --pattern path --primary 1)`.
+Use `mcviz_layer` for the corresponding MCviz commands. For WordNet-P3, replace `graph` with `(--graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv --layers 3 --pattern file:patterns/WordNet-P3.pattern --primary 1)`.
 
 Each objective has its own index; an index built for one objective must not be used for another.
 
@@ -106,6 +109,19 @@ args=(--graph LastFM.txt --layers 3
       --pattern star --primary 0 --objective edge)
 ```
 
+For DRKG, first place `DRKG.txt` from the dataset repository in `datasets/`, then run each command from the release directory. The paper uses the five-layer tree and a 60-second initial-solution budget:
+
+```bash
+args=(--graph DRKG.txt --layers 5 --pattern file:patterns/DRKG-tree.pattern
+      --primary 0 --objective edge)
+
+build/bin/mcviz_plus_layer construct "${args[@]}" --beta 2,2,2,2,2 --build-threads 1
+build/bin/mcviz_plus_layer query "${args[@]}" --beta 2,2,2,2,2 --gamma 4,4,4,4,4 \
+    --query-heuristic-ms 60000
+```
+
+Use `mcviz_layer` for the corresponding MCviz construction and query. These commands use the default `Index/` and `log/` directories.
+
 ## Hierarchy conversion and output
 
 The conversion program loads an index, converts its component hierarchy to the project's shared linear representation, and restores the hierarchy in memory. The shared representation preserves cross-layer component identities; it is distinct from independently stored per-layer orders.
@@ -115,11 +131,11 @@ After building the WordNet-P3 indexes, run:
 ```bash
 build/bin/mcviz_representation_conversion exact query \
     --graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv \
-    --layers 3 --pattern path --primary 1 --objective edge --beta 2,2,2
+    --layers 3 --pattern file:patterns/WordNet-P3.pattern --primary 1 --objective edge --beta 2,2,2
 
 build/bin/mcviz_representation_conversion upper query \
     --graph WordNet-P3.txt --vertices WordNet-P3.vertices.tsv \
-    --layers 3 --pattern path --primary 1 --objective edge --beta 2,2,2
+    --layers 3 --pattern file:patterns/WordNet-P3.pattern --primary 1 --objective edge --beta 2,2,2
 ```
 
 Commands append compact typed TSV tables to `log/builds.txt`, `log/searches.txt`, and `log/conversions.txt`. Each table begins with the `MCviz-test2 TSV v1` marker, column names, and column types; `\N` represents a missing value. Records include method, input configuration, status, and timing, with result scores for searches and sizes for indexes and representations. A compatible existing index is reused rather than rebuilt; this records `status=reused` without a new construction time. Infeasibility is distinguished from interruption, and a feasible zero-score answer retains `found=true`.

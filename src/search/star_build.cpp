@@ -12,9 +12,10 @@ namespace {
 Layer center_of(const LayerPattern& p) {
     auto centers = p.star_centers();
     require(!centers.empty(), "Star build requires a canonical spanning star");
-    return std::find(centers.begin(), centers.end(), p.anchor_layer) == centers.end()
-        ? centers[0] : p.anchor_layer;
+    return std::find(centers.begin(), centers.end(), p.anchor_layer) == centers.end() ? centers[0]
+                                                                                      : p.anchor_layer;
 }
+
 
 // Pack a typed secondary position; both public types are at most 32 bits.
 std::uint64_t secondary_key(Layer layer, VertexPos pos) {
@@ -23,64 +24,76 @@ std::uint64_t secondary_key(Layer layer, VertexPos pos) {
 
 // Budget accounting saturates instead of wrapping; it is not an objective value.
 std::uint64_t saturated_sum(std::uint64_t a, std::uint64_t b) {
-    return b > std::numeric_limits<std::uint64_t>::max() - a
-        ? std::numeric_limits<std::uint64_t>::max() : a + b;
+    return b > std::numeric_limits<std::uint64_t>::max() - a ? std::numeric_limits<std::uint64_t>::max()
+                                                             : a + b;
 }
 
-// Necessary anchor domain from old opt/exact_build.h::ExactAnchorBuild. A witness
-// containing u uses only N_j(u), so every other primary shares beta[j] neighbors
-// with u in each layer. Seed by the least costly wedge layer, then intersect.
-// Workspace O(n_primary); time is the scanned wedges plus candidate intersections.
+// Intersect per-layer shared-neighbor candidates to form a necessary anchor domain.
+// Time follows scanned wedges and intersections; workspace is O(n_primary).
 class AnchorDomains {
     const Graph& g;
     Layer center;
     const Thresholds& beta;
     std::vector<unsigned> counts;
     std::vector<VertexPos> touched;
-public:
+
+  public:
     AnchorDomains(const Graph& graph, Layer p, const Thresholds& lower)
         : g(graph), center(p), beta(lower), counts(g.vertex_ids[p].size()) {}
 
-    bool domain(VertexPos u, std::vector<VertexPos>& result,
-                std::uint64_t& work, std::uint64_t budget) {
+    bool domain(VertexPos u, std::vector<VertexPos>& result, std::uint64_t& work, std::uint64_t budget) {
         auto charge = [&](std::uint64_t amount) {
             work = saturated_sum(work, amount);
             return work <= budget;
         };
         Layer rare = center;
         std::uint64_t least = std::numeric_limits<std::uint64_t>::max();
-        for (Layer j = 0; j < g.K; ++j) if (j != center) {
-            const auto& neighbors = g.neighbors(center, u, j);
-            if (!charge(neighbors.size())) return false;
-            std::uint64_t cost = 0;
-            for (auto v : neighbors) cost = saturated_sum(cost, g.neighbors(j, v, center).size());
-            if (cost < least) { least = cost; rare = j; }
-        }
+        for (Layer j = 0; j < g.K; ++j)
+            if (j != center) {
+                const auto& neighbors = g.neighbors(center, u, j);
+                if (!charge(neighbors.size())) return false;
+                std::uint64_t cost = 0;
+                for (auto v : neighbors)
+                    cost = saturated_sum(cost, g.neighbors(j, v, center).size());
+                if (cost < least) {
+                    least = cost;
+                    rare = j;
+                }
+            }
         if (rare == center || !charge(least)) return false;
         touched.clear();
-        for (auto v : g.neighbors(center, u, rare)) for (auto x : g.neighbors(rare, v, center)) {
-            if (!counts[x]) touched.push_back(x);
-            ++counts[x];
-        }
+        for (auto v : g.neighbors(center, u, rare))
+            for (auto x : g.neighbors(rare, v, center)) {
+                if (!counts[x]) touched.push_back(x);
+                ++counts[x];
+            }
         for (auto x : touched) {
             bool keep = counts[x] >= beta[rare];
             counts[x] = 0;
-            for (Layer j = 0; j < g.K && keep; ++j) if (j != center && j != rare) {
-                const auto& a = g.neighbors(center, u, j);
-                const auto& b = g.neighbors(center, x, j);
-                if (!charge(saturated_sum(a.size(), b.size()))) {
-                    for (auto v : touched) counts[v] = 0;
-                    return false;
+            for (Layer j = 0; j < g.K && keep; ++j)
+                if (j != center && j != rare) {
+                    const auto& a = g.neighbors(center, u, j);
+                    const auto& b = g.neighbors(center, x, j);
+                    if (!charge(saturated_sum(a.size(), b.size()))) {
+                        for (auto v : touched)
+                            counts[v] = 0;
+                        return false;
+                    }
+                    std::size_t i = 0, k = 0;
+                    Score common = 0;
+                    while (i < a.size() && k < b.size() && common < beta[j]) {
+                        if (a[i] < b[k])
+                            ++i;
+                        else if (b[k] < a[i])
+                            ++k;
+                        else {
+                            ++i;
+                            ++k;
+                            ++common;
+                        }
+                    }
+                    keep = common >= beta[j];
                 }
-                std::size_t i = 0, k = 0;
-                Score common = 0;
-                while (i < a.size() && k < b.size() && common < beta[j]) {
-                    if (a[i] < b[k]) ++i;
-                    else if (b[k] < a[i]) ++k;
-                    else { ++i; ++k; ++common; }
-                }
-                keep = common >= beta[j];
-            }
             if (keep) result.push_back(x);
         }
         std::sort(result.begin(), result.end());
@@ -91,20 +104,23 @@ public:
 // Each anchor owns exactly its incident edges. Complete local enumeration gives
 // their exact values; a partial trial is erased before independent exact fallback.
 // Per-target improvement uses only that edge's witnessed lower bound, never global best.
-void build_anchors(const Graph& active, const LayerPattern& p, Objective obj, Layer center, const Thresholds& beta,
-                   const std::vector<unsigned>& thresholds, legacy_star::ProblemType problem,
-                   std::uint64_t budget, StarWeightBuild& out, std::uint64_t memory) {
+void build_anchors(const Graph& active, const LayerPattern& p, Objective obj, Layer center,
+                   const Thresholds& beta, const std::vector<unsigned>& thresholds,
+                   legacy_star::ProblemType problem, std::uint64_t budget, StarWeightBuild& out,
+                   std::uint64_t memory) {
     std::vector<std::vector<std::size_t>> incident(active.vertex_ids[center].size());
     std::vector<std::vector<std::size_t>> slots(active.K);
-    for (Layer j = 0; j < active.K; ++j) if (j != center) slots[j].resize(active.vertex_ids[j].size());
+    for (Layer j = 0; j < active.K; ++j)
+        if (j != center) slots[j].resize(active.vertex_ids[j].size());
     for (std::size_t id = 0; id < active.edges.size(); ++id) {
         auto e = active.edges[id];
         if (e.u.layer != center) std::swap(e.u, e.v);
         incident[e.u.pos].push_back(id);
     }
     AnchorDomains domains(active, center, beta);
-    SolverOptions solver; solver.backend=RegionBackend::pivot_ordered;
-    solver.pivot_memory_bytes=memory;
+    SolverOptions solver;
+    solver.backend = RegionBackend::pivot_ordered;
+    solver.pivot_memory_bytes = memory;
     for (VertexPos u = 0; u < incident.size(); ++u) {
         ++out.anchor_attempts;
         for (auto id : incident[u]) {
@@ -131,30 +147,41 @@ void build_anchors(const Graph& active, const LayerPattern& p, Objective obj, La
                 if (columns.empty()) {
                     callbacks = saturated_sum(callbacks, secondary.size());
                     columns.reserve(secondary.size());
-                    for (auto [j, v] : secondary) columns.push_back(slots[j][v]);
+                    for (auto [j, v] : secondary)
+                        columns.push_back(slots[j][v]);
                 }
                 callbacks = saturated_sum(callbacks, right.size());
-                if (total_work() > budget) { refused = true; return true; }
-                for (auto v : right) if (out.values[columns[v]] < upper) return true;
+                if (total_work() > budget) {
+                    refused = true;
+                    return true;
+                }
+                for (auto v : right)
+                    if (out.values[columns[v]] < upper) return true;
                 return false;
             };
             auto publish = [&](const legacy_star::StarClique& witness) {
                 if (refused) return;
                 std::uint64_t credits = 0;
-                for (Layer j = 0; j < active.K; ++j) if (j != center)
-                    credits = saturated_sum(credits, witness.sets[j].size());
+                for (Layer j = 0; j < active.K; ++j)
+                    if (j != center) credits = saturated_sum(credits, witness.sets[j].size());
                 callbacks = saturated_sum(callbacks, witness.sets[center].size());
-                if (saturated_sum(total_work(), credits) > budget) { refused = true; return; }
+                if (saturated_sum(total_work(), credits) > budget) {
+                    refused = true;
+                    return;
+                }
                 // u is adjacent to every local secondary column; every maximal witness includes u.
-                if (std::find(witness.sets[center].begin(), witness.sets[center].end(), u) == witness.sets[center].end())
+                if (std::find(witness.sets[center].begin(), witness.sets[center].end(), u) ==
+                    witness.sets[center].end())
                     throw std::logic_error("Anchor witness omitted its universal primary vertex");
                 publications += credits;
                 ++out.anchor_witnesses;
-                for (Layer j = 0; j < active.K; ++j) if (j != center) for (auto v : witness.sets[j])
-                    out.values[slots[j][v]] = std::max<Score>(out.values[slots[j][v]], witness.size);
+                for (Layer j = 0; j < active.K; ++j)
+                    if (j != center)
+                        for (auto v : witness.sets[j])
+                            out.values[slots[j][v]] = std::max<Score>(out.values[slots[j][v]], witness.size);
             };
-            legacy_star::ExactCenterClosure enumeration(active, problem, thresholds, center, 0, 0, 0,
-                                                        false, publish, &domain, u, improve);
+            legacy_star::ExactCenterClosure enumeration(active, problem, thresholds, center, 0, 0, 0, false,
+                                                        publish, &domain, u, improve);
             legacy_star::StarClique unused(active.K);
             status = enumeration.enumerate_budgeted(unused, [&](auto nodes, auto work) {
                 (void)nodes;
@@ -163,7 +190,8 @@ void build_anchors(const Graph& active, const LayerPattern& p, Objective obj, La
             });
             out.anchor_nodes = saturated_sum(out.anchor_nodes, enumeration.visited_nodes());
         }
-        out.anchor_work = saturated_sum(out.anchor_work,
+        out.anchor_work = saturated_sum(
+            out.anchor_work,
             saturated_sum(setup, saturated_sum(internal, saturated_sum(callbacks, publications))));
         out.anchor_publications = saturated_sum(out.anchor_publications, publications);
         if (status == legacy_star::BudgetStatus::Complete && !refused) {
@@ -173,13 +201,15 @@ void build_anchors(const Graph& active, const LayerPattern& p, Objective obj, La
         out.anchor_budget_fallback += refused || status == legacy_star::BudgetStatus::Partial;
         out.anchor_memory_fallback += status == legacy_star::BudgetStatus::MemoryFallback;
         out.anchor_partial_publications = saturated_sum(out.anchor_partial_publications, publications);
-        for (auto id : incident[u]) out.values[id] = 0;
+        for (auto id : incident[u])
+            out.values[id] = 0;
         for (auto id : incident[u]) {
             auto e = active.edges[id];
             if (e.u.layer != center) std::swap(e.u, e.v);
-            auto r=solve_region(active,p,obj,beta,active.all_vertices(),{e.u,e.v},{},solver);
-            require(r.complete,"Star anchor fallback search incomplete");
-            out.values[id]=r.best.found?r.best.score:0;merge_solver_stats(out.solver_stats,r.stats);
+            auto r = solve_region(active, p, obj, beta, active.all_vertices(), {e.u, e.v}, {}, solver);
+            require(r.complete, "Star anchor fallback search incomplete");
+            out.values[id] = r.best.found ? r.best.score : 0;
+            merge_solver_stats(out.solver_stats, r.stats);
             ++out.edge_calls;
         }
     }
@@ -206,8 +236,8 @@ StarBuildView prepare_star_build(const Graph& g, const LayerPattern& p, const Se
     std::vector<std::pair<VertexRef, VertexRef>> edges;
     for (std::size_t id = 0; id < g.edges.size(); ++id) {
         const auto& e = g.edges[id];
-        if (!p.adjacent(e.u.layer, e.v.layer) || !member[e.u.layer][e.u.pos] ||
-            !member[e.v.layer][e.v.pos]) continue;
+        if (!p.adjacent(e.u.layer, e.v.layer) || !member[e.u.layer][e.u.pos] || !member[e.v.layer][e.v.pos])
+            continue;
         edges.push_back({{e.u.layer, e.u.pos}, {e.v.layer, e.v.pos}});
         view.source_edge_ids.push_back(id);
     }
@@ -218,23 +248,21 @@ StarBuildView prepare_star_build(const Graph& g, const LayerPattern& p, const Se
         const auto& a = view.graph.edges[i];
         const auto& b = g.edges[view.source_edge_ids[i]];
         require(a.u.layer == b.u.layer && a.v.layer == b.v.layer &&
-                view.graph.get_id(a.u.layer, a.u.pos) == b.u.pos &&
-                view.graph.get_id(a.v.layer, a.v.pos) == b.v.pos,
+                    view.graph.get_id(a.u.layer, a.u.pos) == b.u.pos &&
+                    view.graph.get_id(a.v.layer, a.v.pos) == b.v.pos,
                 "Star core edge order changed");
     }
     return view;
 }
 
-// Enumerate all feasible maximal stars and credit every contained edge. Each feasible
-// star containing an edge extends to a maximal one; all objectives are monotone, hence
-// the largest credited value is that edge's exact cohesion. No global-best pruning is used.
-// The shared trial is work-budgeted and matrix-budgeted. Any incomplete trial is discarded
-// in full; its owned edges are then solved exactly by the existing fixed-edge solver.
-// Large primary domains share per-anchor searches; smaller domains try one global traversal.
-StarWeightBuild exact_star_build(const Graph& active, const LayerPattern& p,
-                                Objective obj, const Thresholds& beta,
-                                unsigned primary_limit, std::uint64_t work_budget,
-                                bool anchors, std::uint64_t anchor_work_budget, std::uint64_t pivot_memory_bytes) {
+
+
+// Credit each edge with its best maximal-star score; incomplete trials use exact fallback.
+// Enumeration is exponential; workspace includes adjacency matrices and DFS frames.
+StarWeightBuild exact_star_build(const Graph& active, const LayerPattern& p, Objective obj,
+                                 const Thresholds& beta, unsigned primary_limit, std::uint64_t work_budget,
+                                 bool anchors, std::uint64_t anchor_work_budget,
+                                 std::uint64_t pivot_memory_bytes) {
     const Layer center = center_of(p);
     std::vector<unsigned> thresholds;
     for (auto x : beta) {
@@ -245,14 +273,17 @@ StarWeightBuild exact_star_build(const Graph& active, const LayerPattern& p,
     StarWeightBuild out;
     out.values.resize(active.edges.size());
     if (anchors && primary_limit && active.vertex_ids[center].size() > primary_limit) {
-        build_anchors(active, p, obj, center, beta, thresholds, problem, anchor_work_budget, out, pivot_memory_bytes);
+        build_anchors(active, p, obj, center, beta, thresholds, problem, anchor_work_budget, out,
+                      pivot_memory_bytes);
         return out;
     }
     if (primary_limit && active.vertex_ids[center].size() <= primary_limit) {
         out.shared_attempted = true;
-        if (!work_budget) out.budget_fallback = true;
+        if (!work_budget)
+            out.budget_fallback = true;
         else {
-            std::vector<std::unordered_map<std::uint64_t, std::size_t>> targets(active.vertex_ids[center].size());
+            std::vector<std::unordered_map<std::uint64_t, std::size_t>> targets(
+                active.vertex_ids[center].size());
             for (std::size_t id = 0; id < active.edges.size(); ++id) {
                 auto e = active.edges[id];
                 if (e.u.layer != center) std::swap(e.u, e.v);
@@ -264,25 +295,32 @@ StarWeightBuild exact_star_build(const Graph& active, const LayerPattern& p,
             auto publish = [&](const legacy_star::StarClique& witness) {
                 if (publication_refused) return;
                 std::uint64_t secondary = 0;
-                for (Layer j = 0; j < active.K; ++j) if (j != center)
-                    secondary = saturated_sum(secondary, witness.sets[j].size());
+                for (Layer j = 0; j < active.K; ++j)
+                    if (j != center) secondary = saturated_sum(secondary, witness.sets[j].size());
                 const auto primary = std::uint64_t(witness.sets[center].size());
-                const auto credits = primary && secondary > std::numeric_limits<std::uint64_t>::max() / primary
-                    ? std::numeric_limits<std::uint64_t>::max() : primary * secondary;
-                if (saturated_sum(out.shared_work, saturated_sum(out.shared_publications, credits)) > work_budget) {
+                const auto credits =
+                    primary && secondary > std::numeric_limits<std::uint64_t>::max() / primary
+                        ? std::numeric_limits<std::uint64_t>::max()
+                        : primary * secondary;
+                if (saturated_sum(out.shared_work, saturated_sum(out.shared_publications, credits)) >
+                    work_budget) {
                     publication_refused = true;
                     return;
                 }
                 ++out.shared_witnesses;
                 out.shared_publications += credits;
-                for (auto u : witness.sets[center]) for (Layer j = 0; j < active.K; ++j) if (j != center)
-                    for (auto v : witness.sets[j]) {
-                        auto at = targets[u].find(secondary_key(j, v));
-                        require(at != targets[u].end(), "Shared star contains a missing edge");
-                        out.values[at->second] = std::max<Score>(out.values[at->second], witness.size);
-                    }
+                for (auto u : witness.sets[center])
+                    for (Layer j = 0; j < active.K; ++j)
+                        if (j != center)
+                            for (auto v : witness.sets[j]) {
+                                auto at = targets[u].find(secondary_key(j, v));
+                                require(at != targets[u].end(), "Shared star contains a missing edge");
+                                out.values[at->second] =
+                                    std::max<Score>(out.values[at->second], witness.size);
+                            }
             };
-            legacy_star::ExactCenterClosure enumeration(active, problem, thresholds, center, 0, 0, 0, true, publish);
+            legacy_star::ExactCenterClosure enumeration(active, problem, thresholds, center, 0, 0, 0, true,
+                                                        publish);
             legacy_star::StarClique unused(active.K);
             auto status = enumeration.enumerate_budgeted(unused, [&](auto nodes, auto work) {
                 out.shared_nodes = nodes;
@@ -298,14 +336,16 @@ StarWeightBuild exact_star_build(const Graph& active, const LayerPattern& p,
     }
     // Shared trials may retain their specialized enumeration; each independent
     // fallback edge uses the same production regional backend as queries.
-    SolverOptions solver;solver.backend=RegionBackend::pivot_ordered;
-    solver.pivot_memory_bytes=pivot_memory_bytes;
+    SolverOptions solver;
+    solver.backend = RegionBackend::pivot_ordered;
+    solver.pivot_memory_bytes = pivot_memory_bytes;
     for (std::size_t id = 0; id < active.edges.size(); ++id) {
         auto e = active.edges[id];
         if (e.u.layer != center) std::swap(e.u, e.v);
-        auto r=solve_region(active,p,obj,beta,active.all_vertices(),{e.u,e.v},{},solver);
-        require(r.complete,"Star edge fallback search incomplete");
-        out.values[id]=r.best.found?r.best.score:0;merge_solver_stats(out.solver_stats,r.stats);
+        auto r = solve_region(active, p, obj, beta, active.all_vertices(), {e.u, e.v}, {}, solver);
+        require(r.complete, "Star edge fallback search incomplete");
+        out.values[id] = r.best.found ? r.best.score : 0;
+        merge_solver_stats(out.solver_stats, r.stats);
         ++out.edge_calls;
     }
     return out;
